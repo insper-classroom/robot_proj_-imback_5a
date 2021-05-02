@@ -2,14 +2,14 @@
 
 Nome do grupo: 
 
-____________
+** Im_Back_5a ** 
 
 Nome dos integrantes: 
 
-* pessoa 1
-* pessoa 2
-* pessoa 3
-* pessoa 4
+**Ana Carolina Souza 
+  Felipe Lemos
+  Tiago Seixas **
+
 
 
 Visite sempre o enunciado abaixo para atualizacões: 
