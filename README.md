@@ -2,13 +2,13 @@
 
 Nome do grupo: 
 
-** Im_Back_5a ** 
+**Im_Back_5a** 
 
 Nome dos integrantes: 
 
-**Ana Carolina Souza 
-  Felipe Lemos
-  Tiago Seixas **
+**Ana Carolina Souza**
+**Felipe Lemos**
+**Tiago Seixas**
 
 
 
