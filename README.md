@@ -6,9 +6,9 @@ Nome do grupo:
 
 Nome dos integrantes: 
 
-**Ana Carolina Souza**
-**Felipe Lemos**
-**Tiago Seixas**
+* Ana Carolina Souza
+* Felipe Lemos
+* Tiago Seixas
 
 
 
