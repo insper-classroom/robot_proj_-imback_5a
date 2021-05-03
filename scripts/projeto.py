@@ -159,6 +159,102 @@ def regressao_por_centro(img, x,y):
 
     return img, (w, z)
 
+def intersect_segs(seg1, seg2):
+    m1,h1 = find_m_h(seg1)
+    m2,h2 = find_m_h(seg2)
+    x_i = (h2 - h1)/(m1-m2)
+    y_i = m1*x_i + h1
+    return x_i, y_i
+
+def morpho_limpa(mask):
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(3,3))
+    mask = cv2.morphologyEx( mask, cv2.MORPH_OPEN, kernel )
+    mask = cv2.morphologyEx( mask, cv2.MORPH_CLOSE, kernel )    
+    return mask
+
+def auto_canny(image, sigma=0.33):
+    # compute the median of the single channel pixel intensities
+    v = np.median(image)
+
+    # apply automatic Canny edge detection using the computed median
+    lower = int(max(0, (1.0 - sigma) * v))
+    upper = int(min(255, (1.0 + sigma) * v))
+    edged = cv2.Canny(image, lower, upper)
+
+    # return the edged image
+    return edged
+
+
+ponto_fuga = (320, 240)   
+
+def encontra_pf(bgr_in):
+    """
+       Recebe imagem bgr e retorna
+       tupla (x,y) com a posicao do ponto de fuga
+    """
+    bgr = bgr_in.copy()
+
+    print()
+
+    hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+
+    lower_yellow = numpy.array([25, 50, 50])
+    upper_yellow = numpy.array([35, 255, 255])
+    mask = cv2.inRange(hsv, lower_yellow, upper_yellow)
+    bordas = auto_canny(mask)
+
+    #print("Tamanho da tela", mask.shape) 
+
+    lines = cv2.HoughLinesP(image = bordas, rho = 1, theta = math.pi/180.0, threshold = 40, lines= np.array([]), minLineLength = 30, maxLineGap = 5)
+
+    if lines is None:
+        return
+
+    a,b,c = lines.shape
+
+    bordas = morpho_limpa(bordas)
+
+    hough_img_rgb = cv2.cvtColor(bordas, cv2.COLOR_GRAY2BGR)
+
+    neg = []
+    pos = []
+
+    for i in range(a):
+        # Faz uma linha ligando o ponto inicial ao ponto final, com a cor vermelha (BGR)
+        cv2.line(hough_img_rgb, (lines[i][0][0], lines[i][0][1]), (lines[i][0][2], lines[i][0][3]), (80, 80, 80), 5, cv2.LINE_AA)
+        x1, y1, x2, y2 = lines[i][0][0], lines[i][0][1], lines[i][0][2], lines[i][0][3]
+        reta = ((x1, y1), (x2, y2))
+        m = (y2 - y1)/ (x2 - x1)
+
+        if m >= 0.1: 
+            pos.append(reta) 
+        elif m < -0.1:
+            neg.append(reta)
+
+
+    if len(neg) >=1 and len(pos)>=1:
+        # Escolher algum para calcular ponto de fuga
+        # Alternativas:
+        # a. mais longa de cada lado
+        # b. primeira
+        # c. sortear
+        rneg = random.choice(neg)
+        rpos = random.choice(pos)
+
+        cv2.line(hough_img_rgb, rneg[0], rneg[1], (0, 255, 0), 5, cv2.LINE_AA)
+        cv2.line(hough_img_rgb, rpos[0], rpos[1], (255, 0, 0), 5, cv2.LINE_AA)
+
+        pf = intersect_segs(rneg, rpos)
+
+        # Tratamento apenas para caso em que intersecoes nao sao encontradas: 
+        if not np.isnan(pf[0]) and not np.isnan(pf[1]) : 
+            pfi = (int(pf[0]), int(pf[1]))
+            crosshair(hough_img_rgb, pfi, 10, (255,255,255))
+            global ponto_fuga 
+            ponto_fuga = pfi
+
+    cv2.imshow("Saida pf ", hough_img_rgb)    
+
 
 def image_callback(img_cv):
     # BEGIN BRIDGE
@@ -194,14 +290,16 @@ def image_callback(img_cv):
 
     img = desenhar_linha_entre_pontos(mask_bgr, X,Y, (255,0,0))
 
-    
-
     # Regressão Linear
     
     ## Regressão pelo centro
     img, lm = regressao_por_centro(img, X,Y)
 
+    
+
     cv2.imshow("Regressao", img)
+    
+
     cv2.waitKey(3)
 
 
@@ -238,6 +336,7 @@ def roda_todo_frame(imagem):
         # Desnecessário - Hough e MobileNet já abrem janelas
         cv_image = saida_net.copy()
         saida_amarelo = image_callback(cv_image)
+        pf = encontra_pf(cv_image)
         cv2.imshow("cv_image", cv_image)
         cv2.waitKey(1)
     except CvBridgeError as e:
@@ -259,16 +358,48 @@ if __name__=="__main__":
     tfl = tf2_ros.TransformListener(tf_buffer) #conversao do sistema de coordenadas 
     tolerancia = 25
 
+    zero = Twist(Vector3(0,0,0), Vector3(0,0,0))
+    esq = Twist(Vector3(0.1,0,0), Vector3(0,0,0.2))
+    dire = Twist(Vector3(0.1,0,0), Vector3(0,0,-0.2))    
+    frente = Twist(Vector3(0.2,0,0), Vector3(0,0,0))  
+
+
+
+
+    centro  = 320
+    margem = 12
+
     try:
-        # Inicializando - por default gira no sentido anti-horário
-        vel = Twist(Vector3(0,0,0), Vector3(0,0,math.pi/10.0))
+               
         
         while not rospy.is_shutdown():
+
+            if ponto_fuga[0] <  centro - margem: 
+                velocidade_saida.publish(esq)
+                rospy.sleep(0.1)
+
+                #velocidade_saida.publish(zero)
+                #rospy.sleep(0.1)
+
+            elif ponto_fuga[0] >  centro + margem: 
+                velocidade_saida.publish(dire)
+                rospy.sleep(0.1)
+                #velocidade_saida.publish(zero)
+                #rospy.sleep(0.1)
+
+            else: 
+                velocidade_saida.publish(frente)
+                rospy.sleep(0.1)
+                #velocidade_saida.publish(zero)
+                #rospy.sleep(0.1)
+
             for r in resultados:
                 print(r)
-            
-            velocidade_saida.publish(vel)
+
             rospy.sleep(0.1)
+            
+            #velocidade_saida.publish(frente)
+            #rospy.sleep(0.1)
 
     except rospy.ROSInterruptException:
         print("Ocorreu uma exceção com o rospy")
