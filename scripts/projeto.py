@@ -16,6 +16,8 @@ from tf import transformations
 from tf import TransformerROS
 import tf2_ros
 from geometry_msgs.msg import Twist, Vector3, Pose, Vector3Stamped
+import cv2.aruco as aruco
+
 
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Header
@@ -267,6 +269,8 @@ ponto_fuga = (320, 240)
 
 
 def image_callback(img_cv):
+    global angulo 
+    global ids
     # BEGIN BRIDGE
     #image = bridge.imgmsg_to_cv2(msg)
     # END BRIDGE
@@ -284,7 +288,7 @@ def image_callback(img_cv):
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
     # END FILTER
     masked = cv2.bitwise_and(img_cv, img_cv, mask=mask)
-    cv2.imshow("Filtra Amarelo", mask ) 
+    #cv2.imshow("Filtra Amarelo", mask ) 
     cv2.waitKey(3)
 
     #bgr = cv2.cvtColor(HSV, cv2.COLOR_HSV2BGR)\
@@ -305,18 +309,33 @@ def image_callback(img_cv):
     ## Regressão pelo centro
     img, lm = regressao_por_centro(img, X,Y)
 
-    global angulo 
 
     angulo = angulo_com_vertical(img, lm)
     print(angulo)
 
 
     cv2.imshow("Regressao", img)
-    
+   
 
     cv2.waitKey(3)
 
+id_to_find  = 100
+marker_size  = 25 
+#--- Get the camera calibration path
+calib_path  = "/home/borg/catkin_ws/src/robot202/ros/exemplos202/scripts/"
+camera_matrix   = np.loadtxt(calib_path+'cameraMatrix_raspi.txt', delimiter=',')
+camera_distortion   = np.loadtxt(calib_path+'cameraDistortion_raspi.txt', delimiter=',')
 
+aruco_dict  = aruco.getPredefinedDictionary(aruco.DICT_6X6_250)
+parameters  = aruco.DetectorParameters_create()
+parameters.minDistanceToBorder = 0
+
+scan_dist = 0
+def scaneou(dado):
+	#print("scan")
+	global scan_dist 
+	scan_dist = dado.ranges[0]*100
+	return scan_dist
 
 
 # A função a seguir é chamada sempre que chega um novo frame
@@ -326,6 +345,7 @@ def roda_todo_frame(imagem):
     global media
     global centro
     global resultados
+    global ids
 
     now = rospy.get_rostime()
     imgtime = imagem.header.stamp
@@ -350,9 +370,48 @@ def roda_todo_frame(imagem):
         # Desnecessário - Hough e MobileNet já abrem janelas
         cv_image = saida_net.copy()
         saida_amarelo = image_callback(cv_image)
+
+        gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
+        corners, ids, rejectedImgPoints = aruco.detectMarkers(gray, aruco_dict, parameters=parameters)
+		
+        if ids is not None and ids[0] == id_to_find :
+            #-- ret = [rvec, tvec, ?]
+            #-- array of rotation and position of each marker in camera frame
+            #-- rvec = [[rvec_1], [rvec_2], ...]    attitude of the marker respect to camera frame
+            #-- tvec = [[tvec_1], [tvec_2], ...]    position of the marker in camera frame
+            ret = aruco.estimatePoseSingleMarkers(corners, marker_size, camera_matrix, camera_distortion)
+
+            #-- Unpack the output, get only the first
+            rvec, tvec = ret[0][0,0,:], ret[1][0,0,:]
+
+            #-- Desenha um retanculo e exibe Id do marker encontrado
+            aruco.drawDetectedMarkers(cv_image, corners, ids) 
+            aruco.drawAxis(cv_image, camera_matrix, camera_distortion, rvec, tvec, 1)
+            
+            # Calculo usando distancia Euclidiana 
+            distance = np.sqrt(tvec[0]**2 + tvec[1]**2 + tvec[2]**2)
+
+            #-- Print the tag position in camera frame
+            str_position = "Marker x=%4.0f  y=%4.0f  z=%4.0f"%(tvec[0], tvec[1], tvec[2])
+            print(str_position)
+            cv2.putText(cv_image, str_position, (0, 100), font, 1, (0, 255, 0), 1, cv2.LINE_AA)
+
+            #-- Print the tag position in camera frame
+            str_dist = "Dist aruco=%4.0f  scan=%4.0f"%(distance, scan_dist)
+            print(str_dist)
+            cv2.putText(cv_image, str_dist, (0, 15), font, 1, (0, 255, 0), 1, cv2.LINE_AA)
+
+            # Linha referencia em X
+            cv2.line(cv_image, (cv_image.shape[1]/2,cv_image.shape[0]/2), ((cv_image.shape[1]/2 + 50),(cv_image.shape[0]/2)), (0,0,255), 5) 
+            # Linha referencia em Y
+            cv2.line(cv_image, (cv_image.shape[1]/2,cv_image.shape[0]/2), (cv_image.shape[1]/2,(cv_image.shape[0]/2 + 50)), (0,255,0), 5) 	
+
+
+            cv2.putText(cv_image, "%.1f cm -- %.0f deg" % ((tvec[2]), (rvec[2] / 3.1415 * 180)), (0, 230), font, 1, (244, 244, 244), 1, cv2.LINsE_AA)
         #pf = encontra_pf(cv_image)
         cv2.imshow("cv_image", cv_image)
         cv2.waitKey(1)
+
     except CvBridgeError as e:
         print('ex', e)
     
@@ -373,9 +432,11 @@ if __name__=="__main__":
     tolerancia = 25
 
     zero = Twist(Vector3(0,0,0), Vector3(0,0,0))
-    esq = Twist(Vector3(0.2,0,0), Vector3(0,0,0.2))
-    dire = Twist(Vector3(0.2,0,0), Vector3(0,0,-0.2))    
+    esq = Twist(Vector3(0.1,0,0), Vector3(0,0,0.2))
+    dire = Twist(Vector3(0.1,0,0), Vector3(0,0,-0.2))    
     frente = Twist(Vector3(0.2,0,0), Vector3(0,0,0))  
+
+    virar = Twist(Vector3(0.1,0,0), Vector3(0,0,-0.1))  
 
     centro  = 320
     margem = 5
@@ -389,37 +450,22 @@ if __name__=="__main__":
         
         while not rospy.is_shutdown():
 
-            """if ponto_fuga[0] <  centro - margem: 
-                velocidade_saida.publish(esq)
-                rospy.sleep(0.1)
 
-                #velocidade_saida.publish(zero)
-                #rospy.sleep(0.1)
 
-            elif ponto_fuga[0] >  centro + margem: 
-                velocidade_saida.publish(dire)
-                rospy.sleep(0.1)
-                #velocidade_saida.publish(zero)
-                #rospy.sleep(0.1)
-
-            else: 
-                velocidade_saida.publish(frente)
-                rospy.sleep(0.1)
-                #velocidade_saida.publish(zero)
-                #rospy.sleep(0.1)"""
-
-            if angulo > 90 + margem :
+            if angulo > 90 + margem:
                 velocidade_saida.publish(dire)
 
             elif angulo < 90 - margem:
                 velocidade_saida.publish(esq)
 
-            else :
+            else:
                 velocidade_saida.publish(frente)
+            
+            if ids[0] == id_to_find & distance < 0.5:
+                velocidade_saida.publish(virar)
+
+
                          
-
-
-
 
             for r in resultados:
                 print(r)
