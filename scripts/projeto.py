@@ -159,6 +159,14 @@ def regressao_por_centro(img, x,y):
 
     return img, (w, z)
 
+angulo = 90
+
+def angulo_com_vertical(img, lm):
+    global angulo 
+    radianos = math.atan(lm[0])
+    angulo = 90 + math.degrees(radianos)
+    return angulo
+
 def intersect_segs(seg1, seg2):
     m1,h1 = find_m_h(seg1)
     m2,h2 = find_m_h(seg2)
@@ -187,11 +195,12 @@ def auto_canny(image, sigma=0.33):
 
 ponto_fuga = (320, 240)   
 
-def encontra_pf(bgr_in):
+'''def encontra_pf(bgr_in):
     """
        Recebe imagem bgr e retorna
        tupla (x,y) com a posicao do ponto de fuga
     """
+    
     bgr = bgr_in.copy()
 
     print()
@@ -253,7 +262,8 @@ def encontra_pf(bgr_in):
             global ponto_fuga 
             ponto_fuga = pfi
 
-    cv2.imshow("Saida pf ", hough_img_rgb)    
+    cv2.imshow("Saida pf ", hough_img_rgb)    '''
+
 
 
 def image_callback(img_cv):
@@ -295,7 +305,11 @@ def image_callback(img_cv):
     ## Regressão pelo centro
     img, lm = regressao_por_centro(img, X,Y)
 
-    
+    global angulo 
+
+    angulo = angulo_com_vertical(img, lm)
+    print(angulo)
+
 
     cv2.imshow("Regressao", img)
     
@@ -336,7 +350,7 @@ def roda_todo_frame(imagem):
         # Desnecessário - Hough e MobileNet já abrem janelas
         cv_image = saida_net.copy()
         saida_amarelo = image_callback(cv_image)
-        pf = encontra_pf(cv_image)
+        #pf = encontra_pf(cv_image)
         cv2.imshow("cv_image", cv_image)
         cv2.waitKey(1)
     except CvBridgeError as e:
@@ -359,22 +373,23 @@ if __name__=="__main__":
     tolerancia = 25
 
     zero = Twist(Vector3(0,0,0), Vector3(0,0,0))
-    esq = Twist(Vector3(0.1,0,0), Vector3(0,0,0.2))
-    dire = Twist(Vector3(0.1,0,0), Vector3(0,0,-0.2))    
+    esq = Twist(Vector3(0.2,0,0), Vector3(0,0,0.2))
+    dire = Twist(Vector3(0.2,0,0), Vector3(0,0,-0.2))    
     frente = Twist(Vector3(0.2,0,0), Vector3(0,0,0))  
 
-
-
-
     centro  = 320
-    margem = 12
+    margem = 5
+
+
+    
+
 
     try:
                
         
         while not rospy.is_shutdown():
 
-            if ponto_fuga[0] <  centro - margem: 
+            """if ponto_fuga[0] <  centro - margem: 
                 velocidade_saida.publish(esq)
                 rospy.sleep(0.1)
 
@@ -391,7 +406,20 @@ if __name__=="__main__":
                 velocidade_saida.publish(frente)
                 rospy.sleep(0.1)
                 #velocidade_saida.publish(zero)
-                #rospy.sleep(0.1)
+                #rospy.sleep(0.1)"""
+
+            if angulo > 90 + margem :
+                velocidade_saida.publish(dire)
+
+            elif angulo < 90 - margem:
+                velocidade_saida.publish(esq)
+
+            else :
+                velocidade_saida.publish(frente)
+                         
+
+
+
 
             for r in resultados:
                 print(r)
