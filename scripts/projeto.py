@@ -17,21 +17,15 @@ from tf import TransformerROS
 import tf2_ros
 from geometry_msgs.msg import Twist, Vector3, Pose, Vector3Stamped
 import cv2.aruco as aruco
-
-
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Header
-
-
 from sklearn.linear_model import LinearRegression
+import visao_module
+import projeto_utils as utils 
 
 #print("EXECUTE ANTES da 1.a vez: ")
 #print("wget https://github.com/Insper/robot21.1/raw/main/projeto/ros_projeto/scripts/MobileNetSSD_deploy.caffemodel")
 #print("PARA TER OS PESOS DA REDE NEURAL")
-
-
-import visao_module
-
 
 bridge = CvBridge()
 
@@ -57,218 +51,20 @@ id = 0
 frame = "camera_link"
 # frame = "head_camera"  # DESCOMENTE para usar com webcam USB via roslaunch tag_tracking usbcam
 
+#-- Font for the text in the image
+font = cv2.FONT_HERSHEY_PLAIN
+
 tfl = 0
 
 tf_buffer = tf2_ros.Buffer()
 
-def encontrar_centro_dos_contornos(img, contornos):
-    """Não mude ou renomeie esta função
-        deve receber um contorno e retornar, respectivamente, a imagem com uma cruz no centro de cada segmento e o centro dele. formato: img, x, y
-    """
-    centrox = []
-    centroy = []
-
-    for i in contornos:
-        centro_x2, centro_y2 = center_of_mass(i)
-        centrox.append(centro_x2)
-        centroy.append(centro_y2)
-        crosshair(img,(centro_x2, centro_y2), 5, (255,0,0))
-
-    return img, centrox, centroy
-
-def encontrar_contornos(mask):
-    """Não mude ou renomeie esta função
-        deve receber uma imagem preta e branca os contornos encontrados
-    """
-    contornos, arvore = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-
-    return contornos
-
-def crosshair(img, point, size, color):
-    """ Desenha um crosshair centrado no point.
-        point deve ser uma tupla (x,y)
-        color é uma tupla R,G,B uint8
-    """
-    x,y = point
-    cv2.line(img,(x - size,y),(x + size,y),color,2)
-    cv2.line(img,(x,y - size),(x, y + size),color,2)
-
-def center_of_mass(mask):
-    """ Retorna uma tupla (cx, cy) que desenha o centro do contorno"""
-    M = cv2.moments(mask)
-    # Usando a expressão do centróide definida em: https://en.wikipedia.org/wiki/Image_moment
-    
-    m00 = M["m00"]
-
-    if m00 == 0:
-        m00 = 1
-
-    cX = int(M["m10"] / m00)
-    cY = int(M["m01"] / m00)
-    return [int(cX), int(cY)]
-
-def center_of_mass_region(mask, x1, y1, x2, y2):
-    # Para fins de desenho
-    mask_bgr = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
-    clipped = mask[y1:y2, x1:x2]
-    c = center_of_mass(clipped)
-    c[0]+=x1
-    c[1]+=y1
-    crosshair(mask_bgr, c, 10, (0,0,255))
-    cv2.rectangle(mask_bgr, (x1, y1), (x2, y2), (255,0,0),2,cv2.LINE_AA)
-    return mask_bgr
-
-
-def desenhar_linha_entre_pontos(img, X, Y, color):
-    """Não mude ou renomeie esta função
-        deve receber uma lista de coordenadas XY, e retornar uma imagem com uma linha entre os centros EM SEQUENCIA do mais proximo.
-    """
-    for i in range(1,len(X)):
-        cv2.line(img,(X[i-1],Y[i-1]),(X[i],Y[i]),color,2)
-    
-    return img
-
-def regressao_por_centro(img, x,y):
-    """Não mude ou renomeie esta função
-        deve receber uma lista de coordenadas XY, e estimar a melhor reta, utilizando o metodo preferir, que passa pelos centros. Retorne a imagem com a reta e os parametros da reta
-        
-        Dica: cv2.line(img,ponto1,ponto2,color,2) desenha uma linha que passe entre os pontos, mesmo que ponto1 e ponto2 não pertençam a imagem.
-    """
-    x_shape = np.array(x)
-    y_shape = np.array(y)
-
-    x_shape = x_shape.reshape(-1,1)
-    y_shape = y_shape.reshape(-1,1)
-
-    regression = LinearRegression()
-
-    regression.fit(x_shape, y_shape)
-
-    w, z = regression.coef_, regression.intercept_
-
-    a_1 = 100
-    a_2 = 10000
-    b_1 = int((a_1*w+z))
-    b_2 = int((a_2*w+z))
-    ponto_a = (a_1,b_1)
-    ponto_b = (a_2,b_2)
-
-    print(ponto_a, ponto_b)
-
-    cor = (255,0,0)
-
-    cv2.line(img,ponto_a,ponto_b,cor,2)
-
-    return img, (w, z)
+ponto_fuga = (320, 240)   
 
 angulo = 90
 
-def angulo_com_vertical(img, lm):
-    global angulo 
-    radianos = math.atan(lm[0])
-    angulo = 90 + math.degrees(radianos)
-    return angulo
-
-def intersect_segs(seg1, seg2):
-    m1,h1 = find_m_h(seg1)
-    m2,h2 = find_m_h(seg2)
-    x_i = (h2 - h1)/(m1-m2)
-    y_i = m1*x_i + h1
-    return x_i, y_i
-
-def morpho_limpa(mask):
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(3,3))
-    mask = cv2.morphologyEx( mask, cv2.MORPH_OPEN, kernel )
-    mask = cv2.morphologyEx( mask, cv2.MORPH_CLOSE, kernel )    
-    return mask
-
-def auto_canny(image, sigma=0.33):
-    # compute the median of the single channel pixel intensities
-    v = np.median(image)
-
-    # apply automatic Canny edge detection using the computed median
-    lower = int(max(0, (1.0 - sigma) * v))
-    upper = int(min(255, (1.0 + sigma) * v))
-    edged = cv2.Canny(image, lower, upper)
-
-    # return the edged image
-    return edged
-
-
-ponto_fuga = (320, 240)   
-
-'''def encontra_pf(bgr_in):
-    """
-       Recebe imagem bgr e retorna
-       tupla (x,y) com a posicao do ponto de fuga
-    """
-    
-    bgr = bgr_in.copy()
-
-    print()
-
-    hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
-
-    lower_yellow = numpy.array([25, 50, 50])
-    upper_yellow = numpy.array([35, 255, 255])
-    mask = cv2.inRange(hsv, lower_yellow, upper_yellow)
-    bordas = auto_canny(mask)
-
-    #print("Tamanho da tela", mask.shape) 
-
-    lines = cv2.HoughLinesP(image = bordas, rho = 1, theta = math.pi/180.0, threshold = 40, lines= np.array([]), minLineLength = 30, maxLineGap = 5)
-
-    if lines is None:
-        return
-
-    a,b,c = lines.shape
-
-    bordas = morpho_limpa(bordas)
-
-    hough_img_rgb = cv2.cvtColor(bordas, cv2.COLOR_GRAY2BGR)
-
-    neg = []
-    pos = []
-
-    for i in range(a):
-        # Faz uma linha ligando o ponto inicial ao ponto final, com a cor vermelha (BGR)
-        cv2.line(hough_img_rgb, (lines[i][0][0], lines[i][0][1]), (lines[i][0][2], lines[i][0][3]), (80, 80, 80), 5, cv2.LINE_AA)
-        x1, y1, x2, y2 = lines[i][0][0], lines[i][0][1], lines[i][0][2], lines[i][0][3]
-        reta = ((x1, y1), (x2, y2))
-        m = (y2 - y1)/ (x2 - x1)
-
-        if m >= 0.1: 
-            pos.append(reta) 
-        elif m < -0.1:
-            neg.append(reta)
-
-
-    if len(neg) >=1 and len(pos)>=1:
-        # Escolher algum para calcular ponto de fuga
-        # Alternativas:
-        # a. mais longa de cada lado
-        # b. primeira
-        # c. sortear
-        rneg = random.choice(neg)
-        rpos = random.choice(pos)
-
-        cv2.line(hough_img_rgb, rneg[0], rneg[1], (0, 255, 0), 5, cv2.LINE_AA)
-        cv2.line(hough_img_rgb, rpos[0], rpos[1], (255, 0, 0), 5, cv2.LINE_AA)
-
-        pf = intersect_segs(rneg, rpos)
-
-        # Tratamento apenas para caso em que intersecoes nao sao encontradas: 
-        if not np.isnan(pf[0]) and not np.isnan(pf[1]) : 
-            pfi = (int(pf[0]), int(pf[1]))
-            crosshair(hough_img_rgb, pfi, 10, (255,255,255))
-            global ponto_fuga 
-            ponto_fuga = pfi
-
-    cv2.imshow("Saida pf ", hough_img_rgb)    '''
-
-
 
 def image_callback(img_cv):
+
     global angulo 
     global ids
     # BEGIN BRIDGE
@@ -294,23 +90,23 @@ def image_callback(img_cv):
     #bgr = cv2.cvtColor(HSV, cv2.COLOR_HSV2BGR)\
     bgr = img_cv.copy()
 
-    contornos = encontrar_contornos(mask)
+    contornos = utils.encontrar_contornos(mask)
     cv2.drawContours(mask, contornos, -1, [0, 0, 255], 2)
 
-    mask_bgr = center_of_mass_region(mask, 20, 400, bgr.shape[1] - 80, bgr.shape[0]-100)
+    mask_bgr = utils.center_of_mass_region(mask, 20, 400, bgr.shape[1] - 80, bgr.shape[0]-100)
 
     
-    img, X, Y = encontrar_centro_dos_contornos(mask_bgr, contornos)
+    img, X, Y = utils.encontrar_centro_dos_contornos(mask_bgr, contornos)
 
-    img = desenhar_linha_entre_pontos(mask_bgr, X,Y, (255,0,0))
+    img = utils.desenhar_linha_entre_pontos(mask_bgr, X,Y, (255,0,0))
 
     # Regressão Linear
     
     ## Regressão pelo centro
-    img, lm = regressao_por_centro(img, X,Y)
+    img, lm = utils.regressao_por_centro(img, X,Y)
 
 
-    angulo = angulo_com_vertical(img, lm)
+    angulo = utils.angulo_com_vertical(img, lm)
     print(angulo)
 
 
@@ -318,6 +114,14 @@ def image_callback(img_cv):
    
 
     cv2.waitKey(3)
+
+
+def scaneou(dado):
+	#print("scan")
+	global scan_dist 
+	scan_dist = dado.ranges[0]*100
+	return scan_dist
+
 
 id_to_find  = 100
 marker_size  = 25 
@@ -331,12 +135,6 @@ parameters  = aruco.DetectorParameters_create()
 parameters.minDistanceToBorder = 0
 
 scan_dist = 0
-def scaneou(dado):
-	#print("scan")
-	global scan_dist 
-	scan_dist = dado.ranges[0]*100
-	return scan_dist
-
 
 # A função a seguir é chamada sempre que chega um novo frame
 def roda_todo_frame(imagem):
@@ -393,12 +191,12 @@ def roda_todo_frame(imagem):
 
             #-- Print the tag position in camera frame
             str_position = "Marker x=%4.0f  y=%4.0f  z=%4.0f"%(tvec[0], tvec[1], tvec[2])
-            print(str_position)
+            #print(str_position)
             cv2.putText(cv_image, str_position, (0, 100), font, 1, (0, 255, 0), 1, cv2.LINE_AA)
 
             #-- Print the tag position in camera frame
             str_dist = "Dist aruco=%4.0f  scan=%4.0f"%(distance, scan_dist)
-            print(str_dist)
+            #print(str_dist)
             cv2.putText(cv_image, str_dist, (0, 15), font, 1, (0, 255, 0), 1, cv2.LINE_AA)
 
             # Linha referencia em X
@@ -432,43 +230,36 @@ if __name__=="__main__":
     tolerancia = 25
 
     zero = Twist(Vector3(0,0,0), Vector3(0,0,0))
-    esq = Twist(Vector3(0.1,0,0), Vector3(0,0,0.2))
-    dire = Twist(Vector3(0.1,0,0), Vector3(0,0,-0.2))    
-    frente = Twist(Vector3(0.2,0,0), Vector3(0,0,0))  
-
-    virar = Twist(Vector3(0.1,0,0), Vector3(0,0,-0.1))  
-
-    centro  = 320
-    margem = 5
-
-
+    esq = Twist(Vector3(0.1,0,0), Vector3(0,0,0.3))
+    dire = Twist(Vector3(0.1,0,0), Vector3(0,0,-0.3))    
+    frente = Twist(Vector3(0.4,0,0), Vector3(0,0,0))  
+    bifur_esq = Twist(Vector3(0.1,0,0), Vector3(0,0,0.1))  
+    bifur_dire = Twist(Vector3(0.1,0,0), Vector3(0,0,-0.1))  
     
 
+    centro  = 320
+    margem = 10
 
     try:
                
         
         while not rospy.is_shutdown():
 
-
-
-            if angulo > 90 + margem:
+            if angulo > 40 + margem:
                 velocidade_saida.publish(dire)
 
-            elif angulo < 90 - margem:
+            elif angulo < 40 - margem:
                 velocidade_saida.publish(esq)
 
             else:
                 velocidade_saida.publish(frente)
             
-            if ids[0] == id_to_find & distance < 0.5:
-                velocidade_saida.publish(virar)
+            #if ids[0] == id_to_find & distance < 0.5:
+                #velocidade_saida.publish(virar)
 
 
-                         
-
-            for r in resultados:
-                print(r)
+            #for r in resultados:
+                #print(r)
 
             rospy.sleep(0.1)
             
