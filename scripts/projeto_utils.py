@@ -156,3 +156,10 @@ def auto_canny(image, sigma=0.33):
 
     # return the edged image
     return edged
+
+
+def girar(pub, giro, w):
+    delta_t = giro/w
+    vel = Twist(Vector3(0,0,0), Vector3(0,0,w))
+    pub.publish(vel)
+    rospy.sleep(delta_t)

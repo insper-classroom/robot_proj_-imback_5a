@@ -123,6 +123,7 @@ def scaneou(dado):
 	return scan_dist
 
 
+ids = 0 
 id_to_find  = 100
 marker_size  = 25 
 #--- Get the camera calibration path
@@ -136,6 +137,8 @@ parameters.minDistanceToBorder = 0
 
 scan_dist = 0
 
+distance = 151
+
 # A função a seguir é chamada sempre que chega um novo frame
 def roda_todo_frame(imagem):
     print("frame")
@@ -144,6 +147,7 @@ def roda_todo_frame(imagem):
     global centro
     global resultados
     global ids
+    global distance
 
     now = rospy.get_rostime()
     imgtime = imagem.header.stamp
@@ -172,7 +176,8 @@ def roda_todo_frame(imagem):
         gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
         corners, ids, rejectedImgPoints = aruco.detectMarkers(gray, aruco_dict, parameters=parameters)
 		
-        if ids is not None and ids[0] == id_to_find :
+        if ids is not None  :
+     
             #-- ret = [rvec, tvec, ?]
             #-- array of rotation and position of each marker in camera frame
             #-- rvec = [[rvec_1], [rvec_2], ...]    attitude of the marker respect to camera frame
@@ -191,21 +196,23 @@ def roda_todo_frame(imagem):
 
             #-- Print the tag position in camera frame
             str_position = "Marker x=%4.0f  y=%4.0f  z=%4.0f"%(tvec[0], tvec[1], tvec[2])
-            #print(str_position)
+            print(str_position)
             cv2.putText(cv_image, str_position, (0, 100), font, 1, (0, 255, 0), 1, cv2.LINE_AA)
 
             #-- Print the tag position in camera frame
             str_dist = "Dist aruco=%4.0f  scan=%4.0f"%(distance, scan_dist)
-            #print(str_dist)
+            print(str_dist)
             cv2.putText(cv_image, str_dist, (0, 15), font, 1, (0, 255, 0), 1, cv2.LINE_AA)
 
+            
+
             # Linha referencia em X
-            cv2.line(cv_image, (cv_image.shape[1]/2,cv_image.shape[0]/2), ((cv_image.shape[1]/2 + 50),(cv_image.shape[0]/2)), (0,0,255), 5) 
+            #cv2.line(cv_image, (cv_image.shape[1]/2,cv_image.shape[0]/2), ((cv_image.shape[1]/2 + 50),(cv_image.shape[0]/2)), (0,0,255), 5) 
             # Linha referencia em Y
-            cv2.line(cv_image, (cv_image.shape[1]/2,cv_image.shape[0]/2), (cv_image.shape[1]/2,(cv_image.shape[0]/2 + 50)), (0,255,0), 5) 	
+            #cv2.line(cv_image, (cv_image.shape[1]/2,cv_image.shape[0]/2), (cv_image.shape[1]/2,(cv_image.shape[0]/2 + 50)), (0,255,0), 5) 	
 
 
-            cv2.putText(cv_image, "%.1f cm -- %.0f deg" % ((tvec[2]), (rvec[2] / 3.1415 * 180)), (0, 230), font, 1, (244, 244, 244), 1, cv2.LINsE_AA)
+            #cv2.putText(cv_image, "%.1f cm -- %.0f deg" % ((tvec[2]), (rvec[2] / 3.1415 * 180)), (0, 230), font, 1, (244, 244, 244), 1, cv2.LINsE_AA)
         #pf = encontra_pf(cv_image)
         cv2.imshow("cv_image", cv_image)
         cv2.waitKey(1)
@@ -213,6 +220,7 @@ def roda_todo_frame(imagem):
     except CvBridgeError as e:
         print('ex', e)
     
+
 if __name__=="__main__":
     rospy.init_node("cor")
 
@@ -230,32 +238,99 @@ if __name__=="__main__":
     tolerancia = 25
 
     zero = Twist(Vector3(0,0,0), Vector3(0,0,0))
-    esq = Twist(Vector3(0.1,0,0), Vector3(0,0,0.3))
-    dire = Twist(Vector3(0.1,0,0), Vector3(0,0,-0.3))    
+    esq = Twist(Vector3(0.1,0,0), Vector3(0,0,0.2))
+    dire = Twist(Vector3(0.1,0,0), Vector3(0,0,-0.2))    
     frente = Twist(Vector3(0.4,0,0), Vector3(0,0,0))  
-    bifur_esq = Twist(Vector3(0.1,0,0), Vector3(0,0,0.1))  
-    bifur_dire = Twist(Vector3(0.1,0,0), Vector3(0,0,-0.1))  
     
+    giro = np.radians(90)
+    giro_volta = np.radians(360)
 
     centro  = 320
-    margem = 10
+    margem = 5
+
+
+    seguir = 1 
+    bifur_direita = 2
+    bifur_esquerda = 3 
+    voltar = 4
+    circunferencia = 5
+
+
+    state = seguir
 
     try:
                
         
         while not rospy.is_shutdown():
 
-            if angulo > 40 + margem:
-                velocidade_saida.publish(dire)
+            #velocidade_saida.publish(frente)
 
-            elif angulo < 40 - margem:
-                velocidade_saida.publish(esq)
+            #1. seguir ate id 100
 
-            else:
-                velocidade_saida.publish(frente)
+            if state == seguir:
+
+                if distance > 100:
+
+                    if angulo is None:
+                        velocidade_saida(zero)
+
+                    else:
+
+                        if angulo > 90:
+                            if angulo < 150:
+                                velocidade_saida.publish(dire)
+                            else:
+                                velocidade_saida.publish(frente)
+                        else:
+                            if angulo > 30:
+                                velocidade_saida.publish(esq)
+                            else:
+                                velocidade_saida.publish(frente)
+
+                else:
+                    velocidade_saida.publish(zero)
+                    state = bifur_direita
+
+            #2. Bifurcar  a direita            
+            if state == bifur_direita:
+                utils.girar(velocidade_saida, giro, -0.4)
+
+                #3. Ir reto ate id 50
+
+                if distance > 10:
+
+                    if angulo is None:
+                        velocidade_saida(zero)
+
+                    else:
+
+                        if angulo > 90:
+                            if angulo < 150:
+                                velocidade_saida.publish(dire)
+                            else:
+                                velocidade_saida.publish(frente)
+                        else:
+                            if angulo > 30:
+                                velocidade_saida.publish(esq)
+                            else:
+                                velocidade_saida.publish(frente)
+
+                else:
+                    velocidade_saida.publish(zero)
+                    state = voltar
+                
             
-            #if ids[0] == id_to_find & distance < 0.5:
-                #velocidade_saida.publish(virar)
+            #4. Voltar para pista
+            if state == voltar:
+                utils.girar(velocidade_saida,giro_volta,-0.5)
+                state = seguir
+
+            #5. Entrar na circunferencia
+            #6. sair da circunferencia
+            #7. Bifurcar a esquerda
+            #8. ir ate id 150
+            #9. Voltar para pista
+
 
 
             #for r in resultados:
