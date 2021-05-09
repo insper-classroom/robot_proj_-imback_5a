@@ -23,6 +23,15 @@ from sklearn.linear_model import LinearRegression
 import visao_module
 import projeto_utils as utils 
 
+
+#Biblioteca para automacao do teclado e tela
+#python3 -m pip install pyautogui
+import pyautogui
+
+#python3 -m pip install python-time
+import time 
+
+
 #print("EXECUTE ANTES da 1.a vez: ")
 #print("wget https://github.com/Insper/robot21.1/raw/main/projeto/ros_projeto/scripts/MobileNetSSD_deploy.caffemodel")
 #print("PARA TER OS PESOS DA REDE NEURAL")
@@ -62,12 +71,62 @@ ponto_fuga = (320, 240)
 
 angulo = 90
 
-vel = Twist(Vector3(0,0,0), Vector3(0,0,0.2))
+vel = Twist(Vector3(1,0,0), Vector3(0,0,0))
 
 SEGUIR = True
-BIFURCAR = False
+BIFURCAR_DIREITA = False
+BIFURCAR_ESQUERDA = False
 VOLTAR = False
 
+ids = 0 
+id_to_find  = 100
+marker_size  = 25 
+#--- Get the camera calibration path
+calib_path  = "/home/borg/catkin_ws/src/robot202/ros/exemplos202/scripts/"
+camera_matrix   = np.loadtxt(calib_path+'cameraMatrix_raspi.txt', delimiter=',')
+camera_distortion   = np.loadtxt(calib_path+'cameraDistortion_raspi.txt', delimiter=',')
+
+aruco_dict  = aruco.getPredefinedDictionary(aruco.DICT_6X6_250)
+parameters  = aruco.DetectorParameters_create()
+parameters.minDistanceToBorder = 0
+
+scan_dist = 0
+
+distance = 0
+distancenp = 0
+
+#zero = Twist(Vector3(0,0,0), Vector3(0,0,0))
+#esq = Twist(Vector3(0.1,0,0), Vector3(0,0,0.2))
+#dire = Twist(Vector3(0.1,0,0), Vector3(0,0,-0.2))    
+#frente = Twist(Vector3(0.4,0,0), Vector3(0,0,0))  
+
+
+def escolhe_mascara_regressao(mask,bgr):
+
+    contornos = utils.encontrar_contornos(mask)
+    cv2.drawContours(mask, contornos, -1, [0, 0, 255], 2)
+
+    mask_bgr = utils.center_of_mass_region(mask, 20, 400, bgr.shape[1] - 80, bgr.shape[0]-100)
+
+    
+    img, X, Y = utils.encontrar_centro_dos_contornos(mask_bgr, contornos)
+
+    img = utils.desenhar_linha_entre_pontos(mask_bgr, X,Y, (255,0,0))
+
+    # Regressão Linear
+    
+    ## Regressão pelo centro
+    img, lm = utils.regressao_por_centro(img, X,Y)
+
+
+    angulo = utils.angulo_com_vertical(img, lm)
+    
+    str_angulo = "Angulo=%4.0f "%(angulo)
+
+    cv2.putText(img, str_angulo, (0, 100), font, 1, (0, 255, 0), 1, cv2.LINE_AA)
+
+    return angulo, img
+    
 
 
 def image_callback(img_cv):
@@ -78,7 +137,8 @@ def image_callback(img_cv):
     global vel 
     global distance
     global SEGUIR
-    global BIFURCAR
+    global BIFURCAR_DIREITA
+    global BIFURCAR_ESQUERDA
     global VOLTAR
 
     # BEGIN BRIDGE
@@ -101,7 +161,7 @@ def image_callback(img_cv):
     mask_copy_direita = mask.copy()
 
     mask_esquerda  = mask_copy_esquerda[:,0:320]
-    mask_direita = mask_copy_direita[:,320:640]
+    mask_direita = mask_copy_direita[:,380:]
 
     #cv2.imshow("Mascara Esquerda", mask_esquerda)
     #cv2.imshow("Mascara Direita", mask_direita)
@@ -109,39 +169,20 @@ def image_callback(img_cv):
 
     # END FILTER
     masked = cv2.bitwise_and(img_cv, img_cv, mask=mask)
-    #cv2.imshow("Filtra Amarelo", mask ) 
-    cv2.waitKey(3)
 
     #bgr = cv2.cvtColor(HSV, cv2.COLOR_HSV2BGR)\
     bgr = img_cv.copy()
 
-    contornos = utils.encontrar_contornos(mask)
-    cv2.drawContours(mask, contornos, -1, [0, 0, 255], 2)
-
-    mask_bgr = utils.center_of_mass_region(mask, 20, 400, bgr.shape[1] - 80, bgr.shape[0]-100)
-
-    
-    img, X, Y = utils.encontrar_centro_dos_contornos(mask_bgr, contornos)
-
-    img = utils.desenhar_linha_entre_pontos(mask_bgr, X,Y, (255,0,0))
-
-    # Regressão Linear
-    
-    ## Regressão pelo centro
-    img, lm = utils.regressao_por_centro(img, X,Y)
-
-
-    angulo = utils.angulo_com_vertical(img, lm)
-    print(f' Angulo com a vertical{angulo}')
-
-    #zero = Twist(Vector3(0,0,0), Vector3(0,0,0))
-    #esq = Twist(Vector3(0.1,0,0), Vector3(0,0,0.2))
-    #dire = Twist(Vector3(0.1,0,0), Vector3(0,0,-0.2))    
-    #frente = Twist(Vector3(0.4,0,0), Vector3(0,0,0))  
+    #SEGUIR = True
+    #BIFURCAR_DIREITA = False
+    #BIFURCAR_ESQUERDA = False
+    #VOLTAR = False
 
     if SEGUIR:
 
-        if distance > 100:
+        angulo, img = escolhe_mascara_regressao(mask,bgr)
+
+        if distance > 150:
 
             if angulo is None:
                 vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
@@ -160,15 +201,15 @@ def image_callback(img_cv):
                         vel = Twist(Vector3(0.4,0,0), Vector3(0,0,0))  
 
         else:
-            vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
-            SEGUIR,BIFURCAR = False, True
+            #vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
+            SEGUIR, BIFURCAR_DIREITA = False, True
 
 
-    if BIFURCAR:
+    elif BIFURCAR_DIREITA:
 
-        utils.girar(velocidade_saida, giro, -0.4)
+        angulo, img = escolhe_mascara_regressao(mask_direita,bgr)
 
-        if distance  > 10:
+        if distance  > 95:
 
             if angulo is None:
                 vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
@@ -188,12 +229,12 @@ def image_callback(img_cv):
 
         else:
             vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
-            BIFURCAR,VOLTAR = False, True
+            BIFURCAR_DIREITA,VOLTAR = False, True
 
 
-    if VOLTAR:
-        
-        utils.girar(velocidade_saida, np.radians(360), -0.4)
+    elif VOLTAR:
+
+        angulo, img = escolhe_mascara_regressao(mask,bgr)
 
         if angulo is None:
                 vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
@@ -225,23 +266,6 @@ def scaneou(dado):
 	return scan_dist
 
 
-ids = 0 
-id_to_find  = 100
-marker_size  = 25 
-#--- Get the camera calibration path
-calib_path  = "/home/borg/catkin_ws/src/robot202/ros/exemplos202/scripts/"
-camera_matrix   = np.loadtxt(calib_path+'cameraMatrix_raspi.txt', delimiter=',')
-camera_distortion   = np.loadtxt(calib_path+'cameraDistortion_raspi.txt', delimiter=',')
-
-aruco_dict  = aruco.getPredefinedDictionary(aruco.DICT_6X6_250)
-parameters  = aruco.DetectorParameters_create()
-parameters.minDistanceToBorder = 0
-
-scan_dist = 0
-
-distance = 151
-distancenp = 0
-
 # A função a seguir é chamada sempre que chega um novo frame
 def roda_todo_frame(imagem):
     print("frame")
@@ -252,6 +276,7 @@ def roda_todo_frame(imagem):
     global ids
     global distance
     global distancenp
+    global img 
 
     now = rospy.get_rostime()
     imgtime = imagem.header.stamp
@@ -385,5 +410,9 @@ if __name__=="__main__":
 
     except rospy.ROSInterruptException:
         print("Ocorreu uma exceção com o rospy")
+        #codigo para dar restart na posicao original do robo --> depois que apertar ctrl+c
+        pyautogui.click(320,240) #clica em um ponto x a tela para pegar a window do gazebo
+        time.sleep(1)#espera um segundo
+        pyautogui.hotkey('ctrl', 'r')#aperta ctrl + r
 
 
