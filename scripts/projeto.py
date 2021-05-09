@@ -62,11 +62,25 @@ ponto_fuga = (320, 240)
 
 angulo = 90
 
+vel = Twist(Vector3(0,0,0), Vector3(0,0,0.2))
+
+SEGUIR = True
+BIFURCAR = False
+VOLTAR = False
+
+
 
 def image_callback(img_cv):
 
     global angulo 
     global ids
+    global distancenp
+    global vel 
+    global distance
+    global SEGUIR
+    global BIFURCAR
+    global VOLTAR
+
     # BEGIN BRIDGE
     #image = bridge.imgmsg_to_cv2(msg)
     # END BRIDGE
@@ -82,6 +96,17 @@ def image_callback(img_cv):
     kernel = np.ones((5,5),np.uint8)
 
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+
+    mask_copy_esquerda = mask.copy()
+    mask_copy_direita = mask.copy()
+
+    mask_esquerda  = mask_copy_esquerda[:,0:320]
+    mask_direita = mask_copy_direita[:,320:640]
+
+    #cv2.imshow("Mascara Esquerda", mask_esquerda)
+    #cv2.imshow("Mascara Direita", mask_direita)
+
+
     # END FILTER
     masked = cv2.bitwise_and(img_cv, img_cv, mask=mask)
     #cv2.imshow("Filtra Amarelo", mask ) 
@@ -107,7 +132,84 @@ def image_callback(img_cv):
 
 
     angulo = utils.angulo_com_vertical(img, lm)
-    print(angulo)
+    print(f' Angulo com a vertical{angulo}')
+
+    #zero = Twist(Vector3(0,0,0), Vector3(0,0,0))
+    #esq = Twist(Vector3(0.1,0,0), Vector3(0,0,0.2))
+    #dire = Twist(Vector3(0.1,0,0), Vector3(0,0,-0.2))    
+    #frente = Twist(Vector3(0.4,0,0), Vector3(0,0,0))  
+
+    if SEGUIR:
+
+        if distance > 100:
+
+            if angulo is None:
+                vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
+
+            else:
+
+                if angulo > 90:
+                    if angulo < 150:
+                        vel = Twist(Vector3(0.1,0,0), Vector3(0,0,-0.2))
+                    else:
+                        vel = Twist(Vector3(0.4,0,0), Vector3(0,0,0)) 
+                else:
+                    if angulo > 30:
+                        vel = Twist(Vector3(0.1,0,0), Vector3(0,0,0.2))
+                    else:
+                        vel = Twist(Vector3(0.4,0,0), Vector3(0,0,0))  
+
+        else:
+            vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
+            SEGUIR,BIFURCAR = False, True
+
+
+    if BIFURCAR:
+
+        utils.girar(velocidade_saida, giro, -0.4)
+
+        if distance  > 10:
+
+            if angulo is None:
+                vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
+
+            else:
+
+                if angulo > 90:
+                    if angulo < 150:
+                        vel = Twist(Vector3(0.1,0,0), Vector3(0,0,-0.2))
+                    else:
+                        vel = Twist(Vector3(0.4,0,0), Vector3(0,0,0)) 
+                else:
+                    if angulo > 30:
+                        vel = Twist(Vector3(0.1,0,0), Vector3(0,0,0.2))
+                    else:
+                        vel = Twist(Vector3(0.4,0,0), Vector3(0,0,0))
+
+        else:
+            vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
+            BIFURCAR,VOLTAR = False, True
+
+
+    if VOLTAR:
+        
+        utils.girar(velocidade_saida, np.radians(360), -0.4)
+
+        if angulo is None:
+                vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
+
+        else:
+
+            if angulo > 90:
+                if angulo < 150:
+                    vel = Twist(Vector3(0.1,0,0), Vector3(0,0,-0.2))
+                else:
+                    vel = Twist(Vector3(0.4,0,0), Vector3(0,0,0)) 
+            else:
+                if angulo > 30:
+                    vel = Twist(Vector3(0.1,0,0), Vector3(0,0,0.2))
+                else:
+                    vel = Twist(Vector3(0.4,0,0), Vector3(0,0,0))
 
 
     cv2.imshow("Regressao", img)
@@ -138,6 +240,7 @@ parameters.minDistanceToBorder = 0
 scan_dist = 0
 
 distance = 151
+distancenp = 0
 
 # A função a seguir é chamada sempre que chega um novo frame
 def roda_todo_frame(imagem):
@@ -148,6 +251,7 @@ def roda_todo_frame(imagem):
     global resultados
     global ids
     global distance
+    global distancenp
 
     now = rospy.get_rostime()
     imgtime = imagem.header.stamp
@@ -175,45 +279,71 @@ def roda_todo_frame(imagem):
 
         gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
         corners, ids, rejectedImgPoints = aruco.detectMarkers(gray, aruco_dict, parameters=parameters)
-		
-        if ids is not None  :
-     
-            #-- ret = [rvec, tvec, ?]
-            #-- array of rotation and position of each marker in camera frame
-            #-- rvec = [[rvec_1], [rvec_2], ...]    attitude of the marker respect to camera frame
-            #-- tvec = [[tvec_1], [tvec_2], ...]    position of the marker in camera frame
-            ret = aruco.estimatePoseSingleMarkers(corners, marker_size, camera_matrix, camera_distortion)
+        print(ids)
 
-            #-- Unpack the output, get only the first
+        if ids is not None:
+            #-- ret = [rvec, tvec, ?]
+            #-- rvec = [[rvec_1], [rvec_2], ...] vetor de rotação
+            #-- tvec = [[tvec_1], [tvec_2], ...] vetor de translação
+            ret = aruco.estimatePoseSingleMarkers(corners, marker_size, camera_matrix, camera_distortion)
             rvec, tvec = ret[0][0,0,:], ret[1][0,0,:]
 
             #-- Desenha um retanculo e exibe Id do marker encontrado
             aruco.drawDetectedMarkers(cv_image, corners, ids) 
             aruco.drawAxis(cv_image, camera_matrix, camera_distortion, rvec, tvec, 1)
-            
-            # Calculo usando distancia Euclidiana 
-            distance = np.sqrt(tvec[0]**2 + tvec[1]**2 + tvec[2]**2)
 
-            #-- Print the tag position in camera frame
+            #-- Print tvec vetor de tanslação em x y z
             str_position = "Marker x=%4.0f  y=%4.0f  z=%4.0f"%(tvec[0], tvec[1], tvec[2])
             print(str_position)
             cv2.putText(cv_image, str_position, (0, 100), font, 1, (0, 255, 0), 1, cv2.LINE_AA)
 
-            #-- Print the tag position in camera frame
-            str_dist = "Dist aruco=%4.0f  scan=%4.0f"%(distance, scan_dist)
-            print(str_dist)
-            cv2.putText(cv_image, str_dist, (0, 15), font, 1, (0, 255, 0), 1, cv2.LINE_AA)
-
-            
-
+            ##############----- Referencia dos Eixos------###########################
             # Linha referencia em X
             #cv2.line(cv_image, (cv_image.shape[1]/2,cv_image.shape[0]/2), ((cv_image.shape[1]/2 + 50),(cv_image.shape[0]/2)), (0,0,255), 5) 
             # Linha referencia em Y
             #cv2.line(cv_image, (cv_image.shape[1]/2,cv_image.shape[0]/2), (cv_image.shape[1]/2,(cv_image.shape[0]/2 + 50)), (0,255,0), 5) 	
 
+            #####################---- Distancia Euclidiana ----#####################
+            # Calcula a distancia usando apenas a matriz tvec, matriz de tanslação
+            # Pode usar qualquer uma das duas formas
+            distance = np.sqrt(tvec[0]**2 + tvec[1]**2 + tvec[2]**2)
+            distancenp = np.linalg.norm(tvec)
 
-            #cv2.putText(cv_image, "%.1f cm -- %.0f deg" % ((tvec[2]), (rvec[2] / 3.1415 * 180)), (0, 230), font, 1, (244, 244, 244), 1, cv2.LINsE_AA)
-        #pf = encontra_pf(cv_image)
+            #-- Print distance
+            str_dist = "Dist aruco=%4.0f  dis.np=%4.0f"%(distance, distancenp)
+            print(str_dist)
+            cv2.putText(cv_image, str_dist, (0, 15), font, 1, (0, 255, 0), 1, cv2.LINE_AA)
+
+            #####################---- Distancia pelo foco ----#####################
+            #https://www.pyimagesearch.com/2015/01/19/find-distance-camera-objectmarker-using-python-opencv/
+
+            # raspicam v2 focal legth 
+            FOCAL_LENGTH = 3.6 #3.04
+            # pixel por unidade de medida
+            m = (camera_matrix[0][0]/FOCAL_LENGTH + camera_matrix[1][1]/FOCAL_LENGTH)/2
+            # corners[0][0][0][0] = [ID][plano?][pos_corner(sentido horario)][0=valor_pos_x, 1=valor_pos_y]	
+            pixel_length1 = math.sqrt(math.pow(corners[0][0][0][0] - corners[0][0][1][0], 2) + math.pow(corners[0][0][0][1] - corners[0][0][1][1], 2))
+            pixel_length2 = math.sqrt(math.pow(corners[0][0][2][0] - corners[0][0][3][0], 2) + math.pow(corners[0][0][2][1] - corners[0][0][3][1], 2))
+            pixlength = (pixel_length1+pixel_length2)/2
+            dist = marker_size * FOCAL_LENGTH / (pixlength/m)
+
+            #-- Print distancia focal
+            str_distfocal = "Dist focal=%4.0f"%(dist)
+            print(str_distfocal)
+            cv2.putText(cv_image, str_distfocal, (0, 30), font, 1, (0, 255, 0), 1, cv2.LINE_AA)	
+
+
+            ####################--------- desenha o cubo -----------#########################
+            # https://github.com/RaviJoshii/3DModeler/blob/eb7ca48fa06ca85fcf5c5ec9dc4b562ce9a22a76/opencv/program/detect.py			
+            m = marker_size/2
+            pts = np.float32([[-m,m,m], [-m,-m,m], [m,-m,m], [m,m,m],[-m,m,0], [-m,-m,0], [m,-m,0], [m,m,0]])
+            imgpts, _ = cv2.projectPoints(pts, rvec, tvec, camera_matrix, camera_distortion)
+            imgpts = np.int32(imgpts).reshape(-1,2)
+            cv_image = cv2.drawContours(cv_image, [imgpts[:4]],-1,(0,0,255),4)
+            for i,j in zip(range(4),range(4,8)): cv_image = cv2.line(cv_image, tuple(imgpts[i]), tuple(imgpts[j]),(0,0,255),4);
+            cv_image = cv2.drawContours(cv_image, [imgpts[4:]],-1,(0,0,255),4)
+		
+        
         cv2.imshow("cv_image", cv_image)
         cv2.waitKey(1)
 
@@ -236,110 +366,22 @@ if __name__=="__main__":
 
     tfl = tf2_ros.TransformListener(tf_buffer) #conversao do sistema de coordenadas 
     tolerancia = 25
-
-    zero = Twist(Vector3(0,0,0), Vector3(0,0,0))
-    esq = Twist(Vector3(0.1,0,0), Vector3(0,0,0.2))
-    dire = Twist(Vector3(0.1,0,0), Vector3(0,0,-0.2))    
-    frente = Twist(Vector3(0.4,0,0), Vector3(0,0,0))  
-    
-    giro = np.radians(90)
-    giro_volta = np.radians(360)
-
+   
     centro  = 320
     margem = 5
-
-
-    seguir = 1 
-    bifur_direita = 2
-    bifur_esquerda = 3 
-    voltar = 4
-    circunferencia = 5
-
-
-    state = seguir
 
     try:
                
         
         while not rospy.is_shutdown():
-
-            #velocidade_saida.publish(frente)
-
-            #1. seguir ate id 100
-
-            if state == seguir:
-
-                if distance > 100:
-
-                    if angulo is None:
-                        velocidade_saida(zero)
-
-                    else:
-
-                        if angulo > 90:
-                            if angulo < 150:
-                                velocidade_saida.publish(dire)
-                            else:
-                                velocidade_saida.publish(frente)
-                        else:
-                            if angulo > 30:
-                                velocidade_saida.publish(esq)
-                            else:
-                                velocidade_saida.publish(frente)
-
-                else:
-                    velocidade_saida.publish(zero)
-                    state = bifur_direita
-
-            #2. Bifurcar  a direita            
-            if state == bifur_direita:
-                utils.girar(velocidade_saida, giro, -0.4)
-
-                #3. Ir reto ate id 50
-
-                if distance > 10:
-
-                    if angulo is None:
-                        velocidade_saida(zero)
-
-                    else:
-
-                        if angulo > 90:
-                            if angulo < 150:
-                                velocidade_saida.publish(dire)
-                            else:
-                                velocidade_saida.publish(frente)
-                        else:
-                            if angulo > 30:
-                                velocidade_saida.publish(esq)
-                            else:
-                                velocidade_saida.publish(frente)
-
-                else:
-                    velocidade_saida.publish(zero)
-                    state = voltar
-                
+        
             
-            #4. Voltar para pista
-            if state == voltar:
-                utils.girar(velocidade_saida,giro_volta,-0.5)
-                state = seguir
-
-            #5. Entrar na circunferencia
-            #6. sair da circunferencia
-            #7. Bifurcar a esquerda
-            #8. ir ate id 150
-            #9. Voltar para pista
-
-
+            velocidade_saida.publish(vel)
+            rospy.sleep(0.1)
 
             #for r in resultados:
                 #print(r)
 
-            rospy.sleep(0.1)
-            
-            #velocidade_saida.publish(frente)
-            #rospy.sleep(0.1)
 
     except rospy.ROSInterruptException:
         print("Ocorreu uma exceção com o rospy")
