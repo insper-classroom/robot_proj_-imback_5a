@@ -136,10 +136,10 @@ def image_callback(img_cv):
     global distancenp
     global vel 
     global distance
-    global SEGUIR
-    global BIFURCAR_DIREITA
-    global BIFURCAR_ESQUERDA
-    global VOLTAR
+    #global SEGUIR
+    #global BIFURCAR_DIREITA
+    #global BIFURCAR_ESQUERDA
+    #global VOLTAR
 
     # BEGIN BRIDGE
     #image = bridge.imgmsg_to_cv2(msg)
@@ -173,16 +173,16 @@ def image_callback(img_cv):
     #bgr = cv2.cvtColor(HSV, cv2.COLOR_HSV2BGR)\
     bgr = img_cv.copy()
 
-    #SEGUIR = True
-    #BIFURCAR_DIREITA = False
-    #BIFURCAR_ESQUERDA = False
-    #VOLTAR = False
+    SEGUIR = True
+    BIFURCAR_DIREITA = False
+    BIFURCAR_ESQUERDA = False
+    VOLTAR = False
 
     if SEGUIR:
 
         angulo, img = escolhe_mascara_regressao(mask,bgr)
 
-        if distance > 150:
+        if distance > 200:
 
             if angulo is None:
                 vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
@@ -209,7 +209,7 @@ def image_callback(img_cv):
 
         angulo, img = escolhe_mascara_regressao(mask_direita,bgr)
 
-        if distance  > 95:
+        if distance  > 100:
 
             if angulo is None:
                 vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
@@ -292,14 +292,15 @@ def roda_todo_frame(imagem):
         temp_image = bridge.compressed_imgmsg_to_cv2(imagem, "bgr8")
         # Note que os resultados já são guardados automaticamente na variável
         # chamada resultados
-        centro, saida_net, resultados =  visao_module.processa(temp_image)        
+        #centro, saida_net, resultados =  visao_module.processa(temp_image)        
         for r in resultados:
             # print(r) - print feito para documentar e entender
             # o resultado            
             pass
 
         # Desnecessário - Hough e MobileNet já abrem janelas
-        cv_image = saida_net.copy()
+        #cv_image = saida_net.copy()
+        cv_image = temp_image.copy()
         saida_amarelo = image_callback(cv_image)
 
         gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
@@ -381,8 +382,8 @@ if __name__=="__main__":
 
 
     topico_imagem = "/camera/image/compressed"
-
     recebedor = rospy.Subscriber(topico_imagem, CompressedImage, roda_todo_frame, queue_size=4, buff_size = 2**24)
+    #recebe_scan = rospy.Subscriber("/scan", LaserScan, scaneou)
 
 
     print("Usando ", topico_imagem)
@@ -400,7 +401,7 @@ if __name__=="__main__":
         
         while not rospy.is_shutdown():
         
-            
+
             velocidade_saida.publish(vel)
             rospy.sleep(0.1)
 
@@ -411,8 +412,9 @@ if __name__=="__main__":
     except rospy.ROSInterruptException:
         print("Ocorreu uma exceção com o rospy")
         #codigo para dar restart na posicao original do robo --> depois que apertar ctrl+c
-        pyautogui.click(320,240) #clica em um ponto x a tela para pegar a window do gazebo
+        
+        """pyautogui.click(800,800) #clica em um ponto x a tela para pegar a window do gazebo
         time.sleep(1)#espera um segundo
-        pyautogui.hotkey('ctrl', 'r')#aperta ctrl + r
+        pyautogui.hotkey('ctrl', 'r')#aperta ctrl + r"""
 
 
