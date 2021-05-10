@@ -19,11 +19,13 @@ from geometry_msgs.msg import Twist, Vector3, Pose, Vector3Stamped
 import cv2.aruco as aruco
 
 
+
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Header
 
 
 from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor
 
 def encontrar_centro_dos_contornos(img, contornos):
     """Não mude ou renomeie esta função
@@ -158,8 +160,43 @@ def auto_canny(image, sigma=0.33):
     return edged
 
 
-def girar(pub, giro, w):
+def girar(giro, w):
     delta_t = giro/w
     vel = Twist(Vector3(0,0,0), Vector3(0,0,w))
-    pub.publish(vel)
     rospy.sleep(delta_t)
+    
+
+
+def escolhe_mascara_regressao(mask,bgr):
+    try :    
+        contornos = encontrar_contornos(mask)
+        cv2.drawContours(mask, contornos, -1, [0, 0, 255], 2)
+
+        mask_bgr = center_of_mass_region(mask, 20, 400, bgr.shape[1] - 80, bgr.shape[0]-100)
+
+        
+        img, X, Y = encontrar_centro_dos_contornos(mask_bgr, contornos)
+
+        img = desenhar_linha_entre_pontos(mask_bgr, X,Y, (255,0,0))
+
+        # Regressão Linear
+        
+        # Regressão pelo centro por Regressao Linear 
+        img, lm = regressao_por_centro(img, X,Y)
+
+
+        angulo = angulo_com_vertical(img, lm)
+
+        
+        str_angulo = "Angulo=%4.0f "%(angulo)
+
+        cv2.putText(img, str_angulo, (0, 100), cv2.FONT_HERSHEY_PLAIN, 1, (0, 255, 0), 1, cv2.LINE_AA)
+
+        return angulo, img
+
+    
+    except:
+                
+        return 90,bgr
+
+    

@@ -24,6 +24,9 @@ import visao_module
 import projeto_utils as utils 
 
 
+#roslaunch my_simulation forca.launch
+
+
 #Biblioteca para automacao do teclado e tela
 #python3 -m pip install pyautogui
 import pyautogui
@@ -73,10 +76,10 @@ angulo = 90
 
 vel = Twist(Vector3(1,0,0), Vector3(0,0,0))
 
-SEGUIR = True
-BIFURCAR_DIREITA = False
-BIFURCAR_ESQUERDA = False
-VOLTAR = False
+seguir = True
+bifurcar_direita = False
+bifurcar_esquerda = False
+voltar = False
 
 ids = 0 
 id_to_find  = 100
@@ -101,45 +104,42 @@ distancenp = 0
 #frente = Twist(Vector3(0.4,0,0), Vector3(0,0,0))  
 
 
-def escolhe_mascara_regressao(mask,bgr):
+x = -1000
+y = -1000
+z = -1000
 
-    contornos = utils.encontrar_contornos(mask)
-    cv2.drawContours(mask, contornos, -1, [0, 0, 255], 2)
+topico_odom = "/odom"
 
-    mask_bgr = utils.center_of_mass_region(mask, 20, 400, bgr.shape[1] - 80, bgr.shape[0]-100)
+def recebeu_leitura(dado):
+    """
+        Grava nas variáveis x,y,z a posição extraída da odometria
+        Atenção: *não coincidem* com o x,y,z locais do drone
+    """
+    global x
+    global y 
+    global z 
 
-    
-    img, X, Y = utils.encontrar_centro_dos_contornos(mask_bgr, contornos)
-
-    img = utils.desenhar_linha_entre_pontos(mask_bgr, X,Y, (255,0,0))
-
-    # Regressão Linear
-    
-    ## Regressão pelo centro
-    img, lm = utils.regressao_por_centro(img, X,Y)
-
-
-    angulo = utils.angulo_com_vertical(img, lm)
-    
-    str_angulo = "Angulo=%4.0f "%(angulo)
-
-    cv2.putText(img, str_angulo, (0, 100), font, 1, (0, 255, 0), 1, cv2.LINE_AA)
-
-    return angulo, img
-    
+    x = dado.pose.pose.position.x
+    y = dado.pose.pose.position.y
+    z = dado.pose.pose.position.z
 
 
+ 
 def image_callback(img_cv):
-
     global angulo 
     global ids
     global distancenp
     global vel 
     global distance
-    #global SEGUIR
-    #global BIFURCAR_DIREITA
-    #global BIFURCAR_ESQUERDA
-    #global VOLTAR
+    global distancenp
+    global tvec
+    global seguir
+    global bifurcar_direita
+    global bifurcar_esquerda
+    global voltar
+    global x
+    global y
+    global z 
 
     # BEGIN BRIDGE
     #image = bridge.imgmsg_to_cv2(msg)
@@ -161,10 +161,12 @@ def image_callback(img_cv):
     mask_copy_direita = mask.copy()
 
     mask_esquerda  = mask_copy_esquerda[:,0:320]
-    mask_direita = mask_copy_direita[:,380:]
+    mask_direita = mask_copy_direita[:,390:]
 
     #cv2.imshow("Mascara Esquerda", mask_esquerda)
     #cv2.imshow("Mascara Direita", mask_direita)
+
+    str_odom = "X=%4.2f Y=%4.2f  Z =%4.2f"%(x,y,z)
 
 
     # END FILTER
@@ -173,16 +175,16 @@ def image_callback(img_cv):
     #bgr = cv2.cvtColor(HSV, cv2.COLOR_HSV2BGR)\
     bgr = img_cv.copy()
 
-    SEGUIR = True
-    BIFURCAR_DIREITA = False
-    BIFURCAR_ESQUERDA = False
-    VOLTAR = False
 
-    if SEGUIR:
 
-        angulo, img = escolhe_mascara_regressao(mask,bgr)
+    if seguir:
+        str_estado = 'Entrou no estado SEGUIR'
+        angulo, img = utils.escolhe_mascara_regressao(mask,bgr)
+        cv2.putText(img, str_odom, (0, 150), cv2.FONT_HERSHEY_PLAIN, 1, (0, 255, 0), 1, cv2.LINE_AA)
+        cv2.putText(img, str_estado, (0, 200), cv2.FONT_HERSHEY_PLAIN, 1, (0, 255, 0), 1, cv2.LINE_AA)
+        x_1 = x
 
-        if distance > 200:
+        if x_1 > -1.8 and distance>200:
 
             if angulo is None:
                 vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
@@ -201,15 +203,19 @@ def image_callback(img_cv):
                         vel = Twist(Vector3(0.4,0,0), Vector3(0,0,0))  
 
         else:
-            #vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
-            SEGUIR, BIFURCAR_DIREITA = False, True
+            vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
+            seguir, bifurcar_direita = False, True
 
 
-    elif BIFURCAR_DIREITA:
+    elif bifurcar_direita:
+        str_estado = 'Entrou no estado BIFURCAR DIREITA'
+        angulo, img = utils.escolhe_mascara_regressao(mask_direita,bgr)
+        cv2.putText(img, str_odom, (0, 150), cv2.FONT_HERSHEY_PLAIN, 1, (0, 255, 0), 1, cv2.LINE_AA)
+        cv2.putText(img, str_estado, (0, 200), cv2.FONT_HERSHEY_PLAIN, 1, (0, 255, 0), 1, cv2.LINE_AA)
+        #utils.girar(math.radians(45),-0.2)
+        x_2 = x
 
-        angulo, img = escolhe_mascara_regressao(mask_direita,bgr)
-
-        if distance  > 100:
+        if x_2 > -4.6 and distance >50:
 
             if angulo is None:
                 vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
@@ -229,12 +235,12 @@ def image_callback(img_cv):
 
         else:
             vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
-            BIFURCAR_DIREITA,VOLTAR = False, True
+            bifurcar_direita,voltar =  False, True
 
 
-    elif VOLTAR:
+    elif voltar:
 
-        angulo, img = escolhe_mascara_regressao(mask,bgr)
+        angulo, img = utils.escolhe_mascara_regressao(mask,bgr)
 
         if angulo is None:
                 vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
@@ -253,7 +259,8 @@ def image_callback(img_cv):
                     vel = Twist(Vector3(0.4,0,0), Vector3(0,0,0))
 
 
-    cv2.imshow("Regressao", img)
+    cv2.imshow("Regressao Linear", img)
+    
    
 
     cv2.waitKey(3)
@@ -305,9 +312,9 @@ def roda_todo_frame(imagem):
 
         gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
         corners, ids, rejectedImgPoints = aruco.detectMarkers(gray, aruco_dict, parameters=parameters)
-        print(ids)
+        #print(ids)
 
-        if ids is not None:
+        if ids is not None and ids[0]==id_to_find:
             #-- ret = [rvec, tvec, ?]
             #-- rvec = [[rvec_1], [rvec_2], ...] vetor de rotação
             #-- tvec = [[tvec_1], [tvec_2], ...] vetor de translação
@@ -320,7 +327,7 @@ def roda_todo_frame(imagem):
 
             #-- Print tvec vetor de tanslação em x y z
             str_position = "Marker x=%4.0f  y=%4.0f  z=%4.0f"%(tvec[0], tvec[1], tvec[2])
-            print(str_position)
+            #print(str_position)
             cv2.putText(cv_image, str_position, (0, 100), font, 1, (0, 255, 0), 1, cv2.LINE_AA)
 
             ##############----- Referencia dos Eixos------###########################
@@ -337,7 +344,7 @@ def roda_todo_frame(imagem):
 
             #-- Print distance
             str_dist = "Dist aruco=%4.0f  dis.np=%4.0f"%(distance, distancenp)
-            print(str_dist)
+            #print(str_dist)
             cv2.putText(cv_image, str_dist, (0, 15), font, 1, (0, 255, 0), 1, cv2.LINE_AA)
 
             #####################---- Distancia pelo foco ----#####################
@@ -355,7 +362,7 @@ def roda_todo_frame(imagem):
 
             #-- Print distancia focal
             str_distfocal = "Dist focal=%4.0f"%(dist)
-            print(str_distfocal)
+            #print(str_distfocal)
             cv2.putText(cv_image, str_distfocal, (0, 30), font, 1, (0, 255, 0), 1, cv2.LINE_AA)	
 
 
@@ -368,6 +375,8 @@ def roda_todo_frame(imagem):
             cv_image = cv2.drawContours(cv_image, [imgpts[:4]],-1,(0,0,255),4)
             for i,j in zip(range(4),range(4,8)): cv_image = cv2.line(cv_image, tuple(imgpts[i]), tuple(imgpts[j]),(0,0,255),4);
             cv_image = cv2.drawContours(cv_image, [imgpts[4:]],-1,(0,0,255),4)
+
+            
 		
         
         cv2.imshow("cv_image", cv_image)
@@ -383,10 +392,11 @@ if __name__=="__main__":
 
     topico_imagem = "/camera/image/compressed"
     recebedor = rospy.Subscriber(topico_imagem, CompressedImage, roda_todo_frame, queue_size=4, buff_size = 2**24)
+    recebe_scan = rospy.Subscriber(topico_odom, Odometry , recebeu_leitura)
     #recebe_scan = rospy.Subscriber("/scan", LaserScan, scaneou)
 
 
-    print("Usando ", topico_imagem)
+    #print("Usando ", topico_imagem)
 
     velocidade_saida = rospy.Publisher("/cmd_vel", Twist, queue_size = 1)
 
@@ -400,8 +410,7 @@ if __name__=="__main__":
                
         
         while not rospy.is_shutdown():
-        
-
+            print("x {} y {} z {}".format(x, y, z))
             velocidade_saida.publish(vel)
             rospy.sleep(0.1)
 
@@ -414,7 +423,7 @@ if __name__=="__main__":
         #codigo para dar restart na posicao original do robo --> depois que apertar ctrl+c
         
         """pyautogui.click(800,800) #clica em um ponto x a tela para pegar a window do gazebo
-        time.sleep(1)#espera um segundo
-        pyautogui.hotkey('ctrl', 'r')#aperta ctrl + r"""
+        time.sleep(1) #espera um segundo
+        pyautogui.hotkey('ctrl', 'r')#aperta ctrl + r """
 
 
