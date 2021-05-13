@@ -107,6 +107,7 @@ centro_caixa = (320, 240)
 
 
 ## 
+distancia = 0
 distance = 0
 
 ids = 0 
@@ -136,6 +137,7 @@ def roda_todo_frame(imagem):
     global x_odom
     global y_odom
     global state
+    global distancia 
        
 
     try:
@@ -175,6 +177,10 @@ def roda_todo_frame(imagem):
             str_odom = "x = %5.4f y = %5.4f"%(x_odom, y_odom)
             
             cv2.putText(cv_image, str_odom, (0, 130), font, 1, (0, 0, 255), 1, cv2.LINE_AA)
+
+            str_distancia = f' distancia : {distancia}'
+
+            cv2.putText(cv_image, str_distancia, (0, 300), font, 1, (0, 0, 255), 1, cv2.LINE_AA)
 
             ## Achando o maior objeto azul 
             #media, centro_frame, area = putils.identifica_cor(copia)
@@ -232,6 +238,7 @@ if __name__=="__main__":
     TERMINOU = 4
     BIFURCAR = 5 
     BIFURCAR_ESQUERDA = 6
+    VERIFICAR = 7
 
     state = INICIAL
 
@@ -272,6 +279,9 @@ if __name__=="__main__":
         vel = Twist(Vector3(1,0,0), Vector3(0,0,w))
         cmd_vel.publish(vel)
         rospy.sleep(delta_t)
+
+    def verificar():
+
         
         
         
@@ -284,6 +294,7 @@ if __name__=="__main__":
         global distance
         global x_odom
         global y_odom
+        global distancia
 
 
         if c_img[x] - tol_centro < centro_yellow[x] < c_img[x] + tol_centro:
@@ -291,25 +302,8 @@ if __name__=="__main__":
             if   - tol_ang< angle_yellow  < tol_ang:  # para angulos centrados na vertical, regressao de x = f(y) como está feito
                 state = AVANCA_RAPIDO
 
-            if  x_odom < -2.19 and y_odom > -0.15:# and ids is not None:
-                zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
-                cmd_vel.publish(zero)
-                #state = BIFURCAR_ESQUERDA
-                w = 15
-                giro = math.radians(40)
-                delta_t = giro/w
-                vel = Twist(Vector3(1,0,0), Vector3(0,0,w))
-                cmd_vel.publish(vel)
-                rospy.sleep(delta_t)
-                state = AVANCA
-
-            #     # if distance < 100:
-
-            # if x_odom < -2.5:
-                
-
-
-            # if  -2.60 > x_odom > -2.73 and -0.28 > y_odom > -0.37:
+            # if  x_odom < -2.19 and y_odom > -0.15:# and ids is not None:
+            #     if ids[0] == 100:
             #     zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
             #     cmd_vel.publish(zero)
             #     #state = BIFURCAR_ESQUERDA
@@ -320,6 +314,18 @@ if __name__=="__main__":
             #     cmd_vel.publish(vel)
             #     rospy.sleep(delta_t)
             #     state = AVANCA
+
+                # if distancia < 1 :
+                #     state = TERMINOU
+                #     print(state)
+
+                
+
+                # if ids is not None:
+                #     for i in ids:
+                #         if ids == 23 and distance < 150:
+                #             state = TERMINOU     
+                
             
         else: 
                 state = ALINHA
@@ -327,7 +333,7 @@ if __name__=="__main__":
         print("centro_yellow {} angle_yellow {:.3f} state: {}".format(centro_yellow, angle_yellow, state))
         
 
-    acoes = {INICIAL:inicial, AVANCA: avanca, AVANCA_RAPIDO: avanca_rapido, ALINHA: alinha, AVANCA_PROXIMO: avanca_proximo , TERMINOU: terminou, BIFURCAR: bifurcar, BIFURCAR_ESQUERDA: bifurcar_esquerda}
+    acoes = {INICIAL:inicial, AVANCA: avanca, AVANCA_RAPIDO: avanca_rapido, ALINHA: alinha, AVANCA_PROXIMO: avanca_proximo , TERMINOU: terminou, BIFURCAR: bifurcar, VERIFICAR: verificar}
 
 
     r = rospy.Rate(200) 
