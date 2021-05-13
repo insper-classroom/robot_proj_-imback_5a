@@ -88,7 +88,11 @@ def scaneou(dado):
     global distancia
     
     ranges = np.array(dado.ranges).round(decimals=2)
-    distancia = ranges[0]
+    #distancia = ranges[0]
+    min_comeco = min(ranges[0:15])
+    min_fim = min(ranges[345:360])
+    distancia = min([min_comeco, min_fim])
+
 
 
 
@@ -110,7 +114,7 @@ centro_caixa = (320, 240)
 distancia = 0
 distance = 0
 
-ids = 0 
+ids = []
 id_to_find  = 100
 marker_size  = 25 
 #--- Get the camera calibration path
@@ -121,6 +125,9 @@ camera_distortion   = np.loadtxt(calib_path+'cameraDistortion_raspi.txt', delimi
 aruco_dict  = aruco.getPredefinedDictionary(aruco.DICT_6X6_250)
 parameters  = aruco.DetectorParameters_create()
 parameters.minDistanceToBorder = 0
+
+x_bifurcacao = 1000
+y_bifurcacao = 1000
 
 
 # A função a seguir é chamada sempre que chega um novo frame
@@ -138,6 +145,7 @@ def roda_todo_frame(imagem):
     global y_odom
     global state
     global distancia 
+    global ids
        
 
     try:
@@ -178,15 +186,9 @@ def roda_todo_frame(imagem):
             
             cv2.putText(cv_image, str_odom, (0, 130), font, 1, (0, 0, 255), 1, cv2.LINE_AA)
 
-            str_distancia = f' distancia : {distancia}'
+            str_distancia = f'Distancia : {distancia}'
 
             cv2.putText(cv_image, str_distancia, (0, 300), font, 1, (0, 0, 255), 1, cv2.LINE_AA)
-
-            ## Achando o maior objeto azul 
-            #media, centro_frame, area = putils.identifica_cor(copia)
-            
-            #area_caixa = area
-            #centro_caixa = media
         
 
 
@@ -239,8 +241,11 @@ if __name__=="__main__":
     BIFURCAR = 5 
     BIFURCAR_ESQUERDA = 6
     VERIFICAR = 7
+    VOLTAR = 8
 
     state = INICIAL
+
+    segunda_volta = False
 
     def inicial():
         # Ainda sem uma ação específica
@@ -271,21 +276,31 @@ if __name__=="__main__":
     def bifurcar():
         vel = Twist(Vector3(0.2,0,0), Vector3(0,0,0.5)) 
         cmd_vel.publish(vel)
-
+        
+    def verificar():
+        zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
+        cmd_vel.publish(zero)
+        rospy.sleep(1)
+        
     def bifurcar_esquerda():
-        w = 0.2
-        giro = math.radians(45)
+        w = 5
+        giro = math.radians(60)
         delta_t = giro/0.2
-        vel = Twist(Vector3(1,0,0), Vector3(0,0,w))
+        vel = Twist(Vector3(0,0,0), Vector3(0,0,w))
         cmd_vel.publish(vel)
         rospy.sleep(delta_t)
 
-    def verificar():
+    def voltar():
+        w = 15
+        giro = math.radians(180)
+        delta_t = giro/0.2
+        vel = Twist(Vector3(0,0,0), Vector3(0,0,w))
+        cmd_vel.publish(vel)
+        rospy.sleep(delta_t)
+
+
 
         
-        
-        
-
 
     def dispatch():
         "Logica de determinar o proximo estado"
@@ -295,13 +310,41 @@ if __name__=="__main__":
         global x_odom
         global y_odom
         global distancia
+        global x_bifurcacao
+        global y_bifurcacao
+        global segunda_volta
 
+        if state == VERIFICAR:
+            state = BIFURCAR_ESQUERDA
 
         if c_img[x] - tol_centro < centro_yellow[x] < c_img[x] + tol_centro:
             state = AVANCA
             if   - tol_ang< angle_yellow  < tol_ang:  # para angulos centrados na vertical, regressao de x = f(y) como está feito
                 state = AVANCA_RAPIDO
 
+            if ids is not None:
+                for i in ids:
+                    if i[0] == 100 and distancia < 1.4:
+                        x_bifurcacao = x_odom
+                        y_bifurcacao = y_odom 
+                        state = VERIFICAR
+                        
+                    if (i[0] == 150 or i[0] == 50) and distancia < 0.5:
+                        zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
+                        cmd_vel.publish(zero)
+                        rospy.sleep(1)
+                        segunda_volta = True
+                        state = VOLTAR
+
+        if segunda_volta:
+
+            if x_odom < x_bifurcacao + 0.1 and y_odom < y_bifurcacao + 0.1:
+                if x_odom > x_bifurcacao - 0.1 and y_odom > y_bifurcacao -  0.1:
+                    state = VERIFICAR
+                        
+                       
+            
+            
             # if  x_odom < -2.19 and y_odom > -0.15:# and ids is not None:
             #     if ids[0] == 100:
             #     zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
@@ -333,7 +376,9 @@ if __name__=="__main__":
         print("centro_yellow {} angle_yellow {:.3f} state: {}".format(centro_yellow, angle_yellow, state))
         
 
-    acoes = {INICIAL:inicial, AVANCA: avanca, AVANCA_RAPIDO: avanca_rapido, ALINHA: alinha, AVANCA_PROXIMO: avanca_proximo , TERMINOU: terminou, BIFURCAR: bifurcar, VERIFICAR: verificar}
+    acoes = {INICIAL:inicial, AVANCA: avanca, AVANCA_RAPIDO: avanca_rapido, 
+    ALINHA: alinha, AVANCA_PROXIMO: avanca_proximo , TERMINOU: terminou, BIFURCAR: bifurcar,
+     VERIFICAR: verificar, BIFURCAR_ESQUERDA: bifurcar_esquerda, VOLTAR: voltar}
 
 
     r = rospy.Rate(200) 
