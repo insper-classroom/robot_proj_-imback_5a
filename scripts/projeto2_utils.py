@@ -289,8 +289,3 @@ def crop_esquerda(mask):
     mask = mask[:,0:320]
     return mask
 
-def girar(giro, w):
-    delta_t = giro/w
-    vel = Twist(Vector3(0,0,0), Vector3(0,0,w))
-    cmd_vel.publish(vel)
-    

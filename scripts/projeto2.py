@@ -1,26 +1,25 @@
 from __future__ import print_function, division
 
-#roslaunch my_simulation forca.launch
-
 import rospy 
-
 import numpy as np
-
 import cv2
-
+import tf
+from tf import transformations
+from tf import TransformerROS
+import tf2_ros
 from geometry_msgs.msg import Twist, Vector3
 from sensor_msgs.msg import LaserScan
 from sensor_msgs.msg import Image, CompressedImage
 from cv_bridge import CvBridge, CvBridgeError
-
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Pose
+from geometry_msgs.msg import Twist, Vector3, Pose, Vector3Stamped
 import cv2.aruco as aruco
 from scipy.spatial.transform import Rotation as R
-
+import visao_module
 import math
 import projeto2_utils as putils
 
+#roslaunch my_simulation forca.launch
 
 id = 0
 
@@ -78,7 +77,7 @@ def mypose(msg):
     z = msg.pose.pose.orientation.z
     w = msg.pose.pose.orientation.w
 
-    orientacao_robo = [[x_odom,y_odom,z,w]]
+    orientacao_robo = [[x,y,z,w]]
 
 
 def scaneou(dado):
@@ -152,10 +151,7 @@ def roda_todo_frame(imagem):
 
         if frame%skip==0: # contamos a cada skip frames
 
-            mask = putils.filter_color(copia, low, high)   
-
-            #if state == BIFURCAR_ESQUERDA:
-                #mask = putils.crop_esquerda(mask)        
+            mask = putils.filter_color(copia, low, high)          
 
             img, centro_yellow  =  putils.center_of_mass_region(mask, 0, 300, mask.shape[1], mask.shape[0])  
 
@@ -176,7 +172,8 @@ def roda_todo_frame(imagem):
             str_ids = f"ID: {ids}"
             cv2.putText(cv_image, str_ids, (0, 50), font, 1, (0, 255, 0), 1, cv2.LINE_AA)
 
-            str_odom = "x = {} y = {}".format(x_odom, y_odom)
+            str_odom = "x = %5.4f y = %5.4f"%(x_odom, y_odom)
+            
             cv2.putText(cv_image, str_odom, (0, 130), font, 1, (0, 0, 255), 1, cv2.LINE_AA)
 
             ## Achando o maior objeto azul 
@@ -294,17 +291,36 @@ if __name__=="__main__":
             if   - tol_ang< angle_yellow  < tol_ang:  # para angulos centrados na vertical, regressao de x = f(y) como está feito
                 state = AVANCA_RAPIDO
 
-            if x_odom < -2.1:# and ids is not None:
+            if  x_odom < -2.19 and y_odom > -0.15:# and ids is not None:
                 zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
                 cmd_vel.publish(zero)
                 #state = BIFURCAR_ESQUERDA
                 w = 15
-                giro = math.radians(45)
+                giro = math.radians(40)
                 delta_t = giro/w
                 vel = Twist(Vector3(1,0,0), Vector3(0,0,w))
                 cmd_vel.publish(vel)
                 rospy.sleep(delta_t)
                 state = AVANCA
+
+            #     # if distance < 100:
+
+            # if x_odom < -2.5:
+                
+
+
+            # if  -2.60 > x_odom > -2.73 and -0.28 > y_odom > -0.37:
+            #     zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
+            #     cmd_vel.publish(zero)
+            #     #state = BIFURCAR_ESQUERDA
+            #     w = 15
+            #     giro = math.radians(40)
+            #     delta_t = giro/w
+            #     vel = Twist(Vector3(1,0,0), Vector3(0,0,w))
+            #     cmd_vel.publish(vel)
+            #     rospy.sleep(delta_t)
+            #     state = AVANCA
+            
         else: 
                 state = ALINHA
 
