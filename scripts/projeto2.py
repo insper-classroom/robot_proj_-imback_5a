@@ -1,5 +1,7 @@
 from __future__ import print_function, division
 
+from numpy.core.fromnumeric import put
+
 import rospy 
 import numpy as np
 import cv2
@@ -32,6 +34,7 @@ maxv = 10
 bridge = CvBridge()
 
 cv_image = None
+copia2 = None
 media = []
 centro = []
 atraso = 1.5E9 # 1 segundo e meio. Em nanossegundos
@@ -107,9 +110,6 @@ angle_yellow = 0 # angulo com a vertical
 low = putils.low
 high = putils.high
 
-centro_caixa = (320, 240)
-
-
 ## 
 distancia = 0
 distance = 0
@@ -128,6 +128,15 @@ parameters.minDistanceToBorder = 0
 
 x_bifurcacao = 1000
 y_bifurcacao = 1000
+x_rotatoria = 1000
+y_rotatoria = 1000
+
+acha_cor = None
+
+centro_cor = (320, 240)
+area_cor = 0
+
+bater = True
 
 
 # A função a seguir é chamada sempre que chega um novo frame
@@ -146,6 +155,13 @@ def roda_todo_frame(imagem):
     global state
     global distancia 
     global ids
+    global x_bifurcacao
+    global y_bifurcacao
+    global x_rotatoria
+    global y_rotatoria
+    global centro_cor
+    global area_cor
+    global copia2
        
 
     try:
@@ -153,6 +169,8 @@ def roda_todo_frame(imagem):
         #cv2.imshow("Camera", cv_image)
         ##
         copia = cv_image.copy() # se precisar usar no while
+
+        copia2 = cv_image.copy()
 
         gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
         corners, ids, rejectedImgPoints = aruco.detectMarkers(gray, aruco_dict, parameters=parameters)
@@ -162,6 +180,14 @@ def roda_todo_frame(imagem):
         if frame%skip==0: # contamos a cada skip frames
 
             mask = putils.filter_color(copia, low, high)          
+
+            if state == CORTAR_MASK:
+                mask = mask[:,0:290] #mascara para pegar somente a bifur da esquerda 
+                str_CORTAR_MASK = f'CHEGOU NA BIFURCACA0'
+                cv2.putText(cv_image,str_CORTAR_MASK, (350, 90), font, 1, (150, 0, 200), 1, cv2.LINE_AA)
+
+            else: 
+                pass
 
             img, centro_yellow  =  putils.center_of_mass_region(mask, 0, 300, mask.shape[1], mask.shape[0])  
 
@@ -174,25 +200,40 @@ def roda_todo_frame(imagem):
 
             putils.texto(saida_bgr, f"Angulo graus: {ang_deg}", (15,50), color=(0,255,255))
             putils.texto(saida_bgr, f"Angulo rad: {ang}", (15,90), color=(0,255,255))
-
-            cv2.imshow("centro", img)
-            cv2.imshow("angulo", saida_bgr)
+            
+            #cv2.imshow("centro", img)
+            #cv2.imshow("angulo", saida_bgr)
 
             putils.aruco_reader(cv_image,ids,corners,marker_size,camera_matrix,camera_distortion,font)
             str_ids = f"ID: {ids}"
-            cv2.putText(cv_image, str_ids, (0, 50), font, 1, (0, 255, 0), 1, cv2.LINE_AA)
+            cv2.putText(cv_image, str_ids, (0, 50), font, 1, (255,255,255), 1, cv2.LINE_AA)
 
-            str_odom = "x = %5.4f y = %5.4f"%(x_odom, y_odom)
+            str_odom = "x = %5.4f      y = %5.4f"%(x_odom, y_odom)
             
-            cv2.putText(cv_image, str_odom, (0, 130), font, 1, (0, 0, 255), 1, cv2.LINE_AA)
+            cv2.putText(cv_image, str_odom, (340, 150), font, 1, (255,255,255), 1, cv2.LINE_AA)
 
-            str_distancia = f'Distancia : {distancia}'
+            str_distancia = f'DISTANCIA: {distancia}'
 
-            cv2.putText(cv_image, str_distancia, (0, 300), font, 1, (0, 0, 255), 1, cv2.LINE_AA)
-        
+            cv2.putText(cv_image, str_distancia, (350, 50), font, 1, (255,255,255), 1, cv2.LINE_AA)
 
+            str_estado = f'ESTADO: {state}'
 
-        cv2.imshow("cv_image", cv_image)
+            cv2.putText(cv_image,str_estado, (350, 70), font, 1, (255,255,255), 1, cv2.LINE_AA)
+
+            str_bifurcacao = "x_bifur = %5.2f y_bifur = %5.2f"%(x_bifurcacao, y_bifurcacao)
+
+            cv2.putText(cv_image,str_bifurcacao, (340, 110), font, 1, (255,255,255), 1, cv2.LINE_AA)
+
+            str_rotatoria = "x_rot = %5.2f y_rot = %5.2f"%(x_rotatoria, y_rotatoria)
+
+            cv2.putText(cv_image,str_rotatoria, (340, 130), font, 1, (255,255,255), 1, cv2.LINE_AA)
+            
+            media_cor, centro_frame, area_frame = putils.identifica_cor(copia2,'vermelho')
+
+            area_cor = area_frame
+            centro_cor = media_cor
+
+        #cv2.imshow("cv_image", cv_image)
         
         cv2.waitKey(1)
     except CvBridgeError as e:
@@ -204,7 +245,7 @@ def roda_todo_frame(imagem):
 
 if __name__=="__main__":
 
-    rospy.init_node("q3")
+    rospy.init_node("cor")
 
     topico_imagem = "/camera/image/compressed"
     velocidade_saida = rospy.Publisher("/cmd_vel", Twist, queue_size = 3 )
@@ -226,8 +267,13 @@ if __name__=="__main__":
 
     c_img = (320,240) # Centro da imagem  que ao todo é 640 x 480
 
-    v_slow = 0.3
-    v_rapido = 0.85
+    # v_slow = 0.3
+    # v_rapido = 0.85
+
+    v_slow = 0.5
+    v_rapido = 1
+
+
     w_slow = 0.2
     w_rapido = 0.75
 
@@ -236,16 +282,25 @@ if __name__=="__main__":
     AVANCA = 0
     AVANCA_RAPIDO = 1
     ALINHA = 2
-    AVANCA_PROXIMO = 3
-    TERMINOU = 4
+    TERMINOU = 3
+    PARAR = 4
     BIFURCAR = 5 
-    BIFURCAR_ESQUERDA = 6
-    VERIFICAR = 7
-    VOLTAR = 8
+    VIRAR_ESQUERDA = 6
+    VIRAR_DIREITA = 7
+    CORTAR_MASK = 8
+    VOLTAR = 9
+    FAZENDO_ROTATORIA = 10
+    ALINHA_COR = 11
+
+
+    segunda_volta = False
+    
+    sair_rotatoria = False
 
     state = INICIAL
 
-    segunda_volta = False
+    area_ideal = 1100
+
 
     def inicial():
         # Ainda sem uma ação específica
@@ -264,43 +319,67 @@ if __name__=="__main__":
         max_delta = 150.0
         w = (delta_x/max_delta)*w_rapido
         vel = Twist(Vector3(v_slow,0,0), Vector3(0,0,w)) 
-        cmd_vel.publish(vel)        
-
-    def avanca_proximo():
-       pass
+        cmd_vel.publish(vel)       
 
     def terminou():
         zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
         cmd_vel.publish(zero)
 
+    def parar():
+        zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
+        cmd_vel.publish(zero)
+        rospy.sleep(2)
+
     def bifurcar():
         vel = Twist(Vector3(0.2,0,0), Vector3(0,0,0.5)) 
         cmd_vel.publish(vel)
         
-    def verificar():
+    def CORTAR_MASK():
+        pass
+        
+    def virar_esquerda():
         zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
         cmd_vel.publish(zero)
-        rospy.sleep(1)
-        
-    def bifurcar_esquerda():
-        w = 5
-        giro = math.radians(60)
-        delta_t = giro/0.2
+        rospy.sleep(0.5)
+        w = 0.6
+        giro = math.radians(100)
+        delta_t = giro/w
         vel = Twist(Vector3(0,0,0), Vector3(0,0,w))
+        cmd_vel.publish(vel)
+        rospy.sleep(delta_t)
+        # segunda_volta = False 
+       
+
+    def virar_direita():
+        w = 20
+        giro = math.radians(45)
+        delta_t = giro/w
+        vel = Twist(Vector3(0,0,0), Vector3(0,0,-w))
         cmd_vel.publish(vel)
         rospy.sleep(delta_t)
 
     def voltar():
-        w = 15
-        giro = math.radians(180)
-        delta_t = giro/0.2
+        w = 2
+        giro = math.radians(145)
+        delta_t = giro/w
         vel = Twist(Vector3(0,0,0), Vector3(0,0,w))
         cmd_vel.publish(vel)
         rospy.sleep(delta_t)
 
+    def fazendo_rotatoria():
+        pass
 
 
-        
+    def alinha_cor():
+        delta_x = c_img[x] - centro_cor[x]
+        max_delta = 150.0
+        w = (delta_x/max_delta)*w_rapido
+        vel = Twist(Vector3(v_slow,0,0), Vector3(0,0,w)) 
+        cmd_vel.publish(vel)    
+
+  
+
+
 
     def dispatch():
         "Logica de determinar o proximo estado"
@@ -312,11 +391,47 @@ if __name__=="__main__":
         global distancia
         global x_bifurcacao
         global y_bifurcacao
+        global x_rotatoria
+        global y_rotatoria
         global segunda_volta
+        global angle_yellow
+        global cv_image
+        
 
-        if state == VERIFICAR:
-            state = BIFURCAR_ESQUERDA
+           
+        if state == VIRAR_ESQUERDA:
+            rospy.sleep(1.5)
+            segunda_volta = False
+        
+        if state == PARAR:
+            w = 5
+            giro = math.radians(130)
+            delta_t = giro/w
+            vel = Twist(Vector3(0,0,0), Vector3(0,0,w))
+            cmd_vel.publish(vel)
+            rospy.sleep(delta_t)
+            # segunda_volta = False
+            # state = VIRAR_ESQUERDA
 
+        if state == FAZENDO_ROTATORIA:
+            str_fazendo_rot = "FAZENDO ROTATORIA"
+            print(str_fazendo_rot)
+            cv2.putText(cv_image,str_fazendo_rot, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
+
+            if angle_yellow > 15:
+                if x_odom < x_rotatoria + 0.4:
+                    if y_odom < y_rotatoria - 0.4:
+                        state = CORTAR_MASK
+                        str_sair_rot = 'SAIR DA ROTATORIA'
+                        cv2.putText(cv_image,str_sair_rot, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
+                    
+                      
+        if state == TERMINOU:
+            state = VOLTAR
+
+                    
+
+                            
         if c_img[x] - tol_centro < centro_yellow[x] < c_img[x] + tol_centro:
             state = AVANCA
             if   - tol_ang< angle_yellow  < tol_ang:  # para angulos centrados na vertical, regressao de x = f(y) como está feito
@@ -324,67 +439,191 @@ if __name__=="__main__":
 
             if ids is not None:
                 for i in ids:
-                    if i[0] == 100 and distancia < 1.4:
+    
+                    if distancia < 1.33 and i[0] == 100 :
+                        state = CORTAR_MASK # corta mascara e bifurca para esquerda
                         x_bifurcacao = x_odom
                         y_bifurcacao = y_odom 
-                        state = VERIFICAR
                         
-                    if (i[0] == 150 or i[0] == 50) and distancia < 0.5:
-                        zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
-                        cmd_vel.publish(zero)
-                        rospy.sleep(1)
-                        segunda_volta = True
+                    if i[0] == 150 and distancia < 0.7:
+                        state = TERMINOU #chega no final na bifurcacao da esquerda e volta para pista
                         state = VOLTAR
+                        segunda_volta = True                       
+
+                    if i[0] == 50 and distancia < 0.7:
+                        state = TERMINOU #chega no final na bifurcacao da direita e volta para pista
+                        state = VOLTAR
+                        segunda_volta = False 
+
+                    if i[0] == 200:
+                        if 1 > distancia > 0.75: #entra na rotatoria pela esquerda
+                            x_rotatoria = x_odom
+                            y_rotatoria = y_odom
+                            #state = VIRAR_ESQUERDA
+                            state = FAZENDO_ROTATORIA
+ 
+        else: 
+                state = ALINHA        
 
         if segunda_volta:
-
-            if x_odom < x_bifurcacao + 0.1 and y_odom < y_bifurcacao + 0.1:
-                if x_odom > x_bifurcacao - 0.1 and y_odom > y_bifurcacao -  0.1:
-                    state = VERIFICAR
-                        
+            if x_odom < x_bifurcacao and y_odom < y_bifurcacao:
+                if x_odom > x_bifurcacao - 0.3:
+                    str_fazendo_rot = " VAI BIFURCA NOVAMENTE"
+                    cv2.putText(cv_image,str_fazendo_rot, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
+                    state = VIRAR_ESQUERDA
                        
-            
-            
-            # if  x_odom < -2.19 and y_odom > -0.15:# and ids is not None:
-            #     if ids[0] == 100:
-            #     zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
-            #     cmd_vel.publish(zero)
-            #     #state = BIFURCAR_ESQUERDA
-            #     w = 15
-            #     giro = math.radians(40)
-            #     delta_t = giro/w
-            #     vel = Twist(Vector3(1,0,0), Vector3(0,0,w))
-            #     cmd_vel.publish(vel)
-            #     rospy.sleep(delta_t)
-            #     state = AVANCA
-
-                # if distancia < 1 :
-                #     state = TERMINOU
-                #     print(state)
-
-                
-
-                # if ids is not None:
-                #     for i in ids:
-                #         if ids == 23 and distance < 150:
-                #             state = TERMINOU     
-                
-            
-        else: 
-                state = ALINHA
-
-        print("centro_yellow {} angle_yellow {:.3f} state: {}".format(centro_yellow, angle_yellow, state))
+                    # zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
+                    # cmd_vel.publish(zero)
+                    # rospy.sleep(0.5)
+                    # w = 2
+                    # giro = math.radians(90)
+                    # delta_t = giro/w
+                    # vel = Twist(Vector3(0,0,0), Vector3(0,0,w))
+                    # cmd_vel.publish(vel)
+                    # rospy.sleep(delta_t)             
         
 
+        print("centro_yellow {} angle_yellow {:.3f} state: {}".format(centro_yellow, angle_yellow, state))
+
+
+
+    def achaCreeper():
+        "Logica de determinar o proximo estado"
+        global state
+        global ids
+        global distance
+        global x_odom
+        global y_odom
+        global distancia
+        global x_bifurcacao
+        global y_bifurcacao
+        global x_rotatoria
+        global y_rotatoria
+        global segunda_volta
+        global angle_yellow
+        global cv_image
+        global area_cor
+        global centro_cor
+        global area_ideal 
+        global bater      
+        global copia2
+
+           
+        if state == VIRAR_ESQUERDA:
+            rospy.sleep(1.5)
+            segunda_volta = False
+        
+        if state == PARAR:
+            w = 5
+            giro = math.radians(130)
+            delta_t = giro/w
+            vel = Twist(Vector3(0,0,0), Vector3(0,0,w))
+            cmd_vel.publish(vel)
+            rospy.sleep(delta_t)
+            # segunda_volta = False
+            # state = VIRAR_ESQUERDA
+
+        if state == FAZENDO_ROTATORIA:
+            str_fazendo_rot = "FAZENDO ROTATORIA"
+            print(str_fazendo_rot)
+            cv2.putText(cv_image,str_fazendo_rot, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
+
+            if angle_yellow > 15:
+                if x_odom < x_rotatoria + 0.4:
+                    if y_odom < y_rotatoria - 0.4:
+                        state = CORTAR_MASK
+                        str_sair_rot = 'SAIR DA ROTATORIA'
+                        cv2.putText(cv_image,str_sair_rot, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
+                    
+                      
+        if state == TERMINOU:
+            state = VOLTAR
+
+                            
+        if c_img[x] - tol_centro < centro_yellow[x] < c_img[x] + tol_centro:
+            state = AVANCA
+            if   - tol_ang< angle_yellow  < tol_ang:  # para angulos centrados na vertical, regressao de x = f(y) como está feito
+                state = AVANCA_RAPIDO
+
+            if ids is not None:
+                for i in ids:
+    
+                    if distancia < 1.33 and i[0] == 100 :
+                        state = CORTAR_MASK # corta mascara e bifurca para esquerda
+                        x_bifurcacao = x_odom
+                        y_bifurcacao = y_odom 
+                        
+                    if i[0] == 150 and distancia < 0.7:
+                        state = TERMINOU #chega no final na bifurcacao da esquerda e volta para pista
+                        state = VOLTAR
+                        segunda_volta = True                       
+
+                    if i[0] == 50 and distancia < 0.7:
+                        state = TERMINOU #chega no final na bifurcacao da direita e volta para pista
+                        state = VOLTAR
+                        segunda_volta = False 
+
+                    if i[0] == 200:
+                        if 1 > distancia > 0.75: #entra na rotatoria pela esquerda
+                            x_rotatoria = x_odom
+                            y_rotatoria = y_odom
+                            #state = VIRAR_ESQUERDA
+                            state = FAZENDO_ROTATORIA
+ 
+        else: 
+                state = ALINHA        
+
+        if segunda_volta:
+            if x_odom < x_bifurcacao and y_odom < y_bifurcacao:
+                if x_odom > x_bifurcacao - 0.3:
+                    str_fazendo_rot = " VAI BIFURCA NOVAMENTE"
+                    cv2.putText(cv_image,str_fazendo_rot, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
+                    state = VIRAR_ESQUERDA
+                       
+                    # zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
+                    # cmd_vel.publish(zero)
+                    # rospy.sleep(0.5)
+                    # w = 2
+                    # giro = math.radians(90)
+                    # delta_t = giro/w
+                    # vel = Twist(Vector3(0,0,0), Vector3(0,0,w))
+                    # cmd_vel.publish(vel)
+                    # rospy.sleep(delta_t)             
+
+        if area_cor >= area_ideal and bater:
+
+            if c_img[x] - tol_centro < centro_cor[x] < c_img[x] + tol_centro:
+                state = AVANCA
+                if area_cor > 12000: 
+                    str_creeper = 'VAI BATER NO CREEPER'
+                    cv2.putText(copia2,str_creeper, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
+                    state = TERMINOU 
+                    state = VOLTAR
+                    print(bater)
+                    bater = False
+                    return  
+            else: 
+                state = ALINHA_COR
+
+        print("centro_cor {}  area_cor {}  state: {} ".format(centro_cor, area_cor, state))
+
+
+
     acoes = {INICIAL:inicial, AVANCA: avanca, AVANCA_RAPIDO: avanca_rapido, 
-    ALINHA: alinha, AVANCA_PROXIMO: avanca_proximo , TERMINOU: terminou, BIFURCAR: bifurcar,
-     VERIFICAR: verificar, BIFURCAR_ESQUERDA: bifurcar_esquerda, VOLTAR: voltar}
+    ALINHA: alinha, TERMINOU: terminou, PARAR: parar, VIRAR_ESQUERDA: virar_esquerda, VIRAR_DIREITA: virar_direita,
+    CORTAR_MASK: CORTAR_MASK ,VOLTAR: voltar, FAZENDO_ROTATORIA:fazendo_rotatoria, ALINHA_COR: alinha_cor}
 
 
     r = rospy.Rate(200) 
 
-    while not rospy.is_shutdown():
-        print("Estado: ", state)       
-        acoes[state]()  # executa a funcão que está no dicionário
-        dispatch()            
-        r.sleep()
+    try:
+
+        while not rospy.is_shutdown():
+            print("Estado: ", state)       
+            acoes[state]()  # executa a funcão que está no dicionário
+            # dispatch()       
+            achaCreeper()     
+            r.sleep()
+
+    except rospy.ROSInterruptException:
+        print("Ocorreu uma exceção com o rospy")

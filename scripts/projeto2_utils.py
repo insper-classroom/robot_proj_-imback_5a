@@ -164,7 +164,7 @@ import smach
 import smach_ros
 
 
-def identifica_cor(frame):
+def identifica_cor(frame, cor):
     '''
     Segmenta o maior objeto cuja cor é parecida com cor_h (HUE da cor, no espaço HSV).
     '''
@@ -176,8 +176,19 @@ def identifica_cor(frame):
     # frame = cv2.flip(frame, -1) # flip 0: eixo x, 1: eixo y, -1: 2 eixos
     frame_hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
-    cor_menor = np.array([100, 50, 50]) # Adaptado para azul
-    cor_maior = np.array([120, 255, 255])
+    if cor == 'azul':
+        cor_menor = np.array([78, 50, 50])
+        cor_maior = np.array([120, 255, 255])
+
+    elif cor == 'verde':
+        cor_menor = np.array([35, 50, 50])
+        cor_maior = np.array([70, 255, 255])
+
+    elif cor == 'vermelho':
+        cor_menor = np.array([0, 200, 100])
+        cor_maior = np.array([10, 255, 255])
+
+
     segmentado_cor = cv2.inRange(frame_hsv, cor_menor, cor_maior)
 
     # Note que a notacão do numpy encara as imagens como matriz, portanto o enderecamento é
@@ -223,8 +234,9 @@ def identifica_cor(frame):
 
     # Representa a area e o centro do maior contorno no frame
     font = cv2.FONT_HERSHEY_COMPLEX_SMALL
-    cv2.putText(frame,"{:d} {:d}".format(*media),(20,100), 1, 4,(255,255,255),2,cv2.LINE_AA)
-    cv2.putText(frame,"{:0.1f}".format(maior_contorno_area),(20,50), 1, 4,(255,255,255),2,cv2.LINE_AA)
+    cv2.putText(frame," CENTRO COR {:d} {:d}".format(*media),(300,50), 1, 1, (0,0,0),2,cv2.LINE_AA)
+    cv2.putText(frame,"AREA COR {:0.1f}".format(maior_contorno_area),(300,150), 1, 1 , (0,0,0), 1 ,cv2.LINE_AA)
+    
 
    # cv2.imshow('video', frame)
     cv2.imshow('seg', frame)
@@ -248,7 +260,7 @@ def aruco_reader(cv_image,ids,corners,marker_size,camera_matrix,camera_distortio
             #-- Print tvec vetor de tanslação em x y z
             str_position = "Marker x=%4.0f  y=%4.0f  z=%4.0f"%(tvec[0], tvec[1], tvec[2])
             #print(str_position)
-            cv2.putText(cv_image, str_position, (0, 100), font, 1, (0, 255, 0), 1, cv2.LINE_AA)
+            cv2.putText(cv_image, str_position, (0, 75), font, 1, (255, 255, 255), 1, cv2.LINE_AA)
 
             ##############----- Referencia dos Eixos------###########################
             # Linha referencia em X
@@ -265,7 +277,7 @@ def aruco_reader(cv_image,ids,corners,marker_size,camera_matrix,camera_distortio
             #-- Print distance
             str_dist = "Dist aruco=%4.0f  dis.np=%4.0f"%(distance, distancenp)
             #print(str_dist)
-            cv2.putText(cv_image, str_dist, (0, 15), font, 1, (0, 255, 0), 1, cv2.LINE_AA)
+            cv2.putText(cv_image, str_dist, (0, 15), font, 1, (255, 255, 255), 1, cv2.LINE_AA)
 
             #####################---- Distancia pelo foco ----#####################
             #https://www.pyimagesearch.com/2015/01/19/find-distance-camera-objectmarker-using-python-opencv/
@@ -283,7 +295,7 @@ def aruco_reader(cv_image,ids,corners,marker_size,camera_matrix,camera_distortio
             #-- Print distancia focal
             str_distfocal = "Dist focal=%4.0f"%(dist)
             print(str_distfocal)
-            cv2.putText(cv_image, str_distfocal, (0, 30), font, 1, (0, 255, 0), 1, cv2.LINE_AA)	
+            cv2.putText(cv_image, str_distfocal, (0, 30), font, 1, (255, 255, 255), 1, cv2.LINE_AA)	
 
 def crop_esquerda(mask):
     mask = mask[:,0:320]
