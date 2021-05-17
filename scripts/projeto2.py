@@ -1,3 +1,7 @@
+#! /usr/bin/env python3
+# -*- coding:utf-8 -*-
+
+
 from __future__ import print_function, division
 
 from numpy.core.fromnumeric import put
@@ -21,8 +25,11 @@ import visao_module
 import math
 import projeto2_utils as putils
 
-#roslaunch my_simulation forca.launch
 
+# Para rodar a simulacao faca : roslaunch my_simulation forca.launch
+# Para rodar o progama: python3 scrpits/projeto.py
+
+# ---------------------------------------------------------------------------------------------- DEFININDO AS VARIAVEIS ----------------------------------------------------------------------------------------------------------------
 id = 0
 
 #-- Font for the text in the image
@@ -42,7 +49,51 @@ atraso = 1.5E9 # 1 segundo e meio. Em nanossegundos
 frame = "camera_link"
 # frame = "head_camera"  # DESCOMENTE para usar com webcam USB via roslaunch tag_tracking usbcam
 
+x_odom = -1000
+y_odom = -1000
 
+## Variáveis novas criadas pelo gabarito
+
+centro_yellow = (320,240)
+frame = 0
+skip = 3
+m = 0
+angle_yellow = 0 # angulo com a vertical
+
+low = putils.low
+high = putils.high
+
+## 
+distancia = 0
+distance = 0
+
+ids = []
+id_to_find  = 100
+marker_size  = 25 
+#--- Get the camera calibration path
+calib_path  = "/home/borg/catkin_ws/src/robot202/ros/exemplos202/scripts/"
+camera_matrix   = np.loadtxt(calib_path+'cameraMatrix_raspi.txt', delimiter=',')
+camera_distortion   = np.loadtxt(calib_path+'cameraDistortion_raspi.txt', delimiter=',')
+
+aruco_dict  = aruco.getPredefinedDictionary(aruco.DICT_6X6_250)
+parameters  = aruco.DetectorParameters_create()
+parameters.minDistanceToBorder = 0
+
+x_bifurcacao = 1000
+y_bifurcacao = 1000
+x_rotatoria = 1000
+y_rotatoria = 1000
+
+acha_cor = None
+
+centro_cor = (320, 240)
+area_cor = 0
+
+bater = True
+
+goal = 'vermelho'
+
+# ---------------------------------------------------------------------------------------------- FUNCOES DE POSICOES E SENSORES ----------------------------------------------------------------------------------------------------------------------------
 
 def quart_to_euler(orientacao):
     """
@@ -53,9 +104,6 @@ def quart_to_euler(orientacao):
     wx, wy, wz = (r.as_euler('xyz', degrees=True))
 
     return wz
-
-x_odom = -1000
-y_odom = -1000
 
 
 def recebeu_leitura(dado):
@@ -97,48 +145,6 @@ def scaneou(dado):
     distancia = min([min_comeco, min_fim])
 
 
-
-
-## Variáveis novas criadas pelo gabarito
-
-centro_yellow = (320,240)
-frame = 0
-skip = 3
-m = 0
-angle_yellow = 0 # angulo com a vertical
-
-low = putils.low
-high = putils.high
-
-## 
-distancia = 0
-distance = 0
-
-ids = []
-id_to_find  = 100
-marker_size  = 25 
-#--- Get the camera calibration path
-calib_path  = "/home/borg/catkin_ws/src/robot202/ros/exemplos202/scripts/"
-camera_matrix   = np.loadtxt(calib_path+'cameraMatrix_raspi.txt', delimiter=',')
-camera_distortion   = np.loadtxt(calib_path+'cameraDistortion_raspi.txt', delimiter=',')
-
-aruco_dict  = aruco.getPredefinedDictionary(aruco.DICT_6X6_250)
-parameters  = aruco.DetectorParameters_create()
-parameters.minDistanceToBorder = 0
-
-x_bifurcacao = 1000
-y_bifurcacao = 1000
-x_rotatoria = 1000
-y_rotatoria = 1000
-
-acha_cor = None
-
-centro_cor = (320, 240)
-area_cor = 0
-
-bater = True
-
-
 # A função a seguir é chamada sempre que chega um novo frame
 def roda_todo_frame(imagem):
     global centro_yellow
@@ -162,6 +168,7 @@ def roda_todo_frame(imagem):
     global centro_cor
     global area_cor
     global copia2
+    global goal
        
 
     try:
@@ -201,8 +208,8 @@ def roda_todo_frame(imagem):
             putils.texto(saida_bgr, f"Angulo graus: {ang_deg}", (15,50), color=(0,255,255))
             putils.texto(saida_bgr, f"Angulo rad: {ang}", (15,90), color=(0,255,255))
             
-            #cv2.imshow("centro", img)
-            #cv2.imshow("angulo", saida_bgr)
+            # cv2.imshow("centro", img)
+            # cv2.imshow("angulo", saida_bgr)
 
             putils.aruco_reader(cv_image,ids,corners,marker_size,camera_matrix,camera_distortion,font)
             str_ids = f"ID: {ids}"
@@ -228,19 +235,16 @@ def roda_todo_frame(imagem):
 
             cv2.putText(cv_image,str_rotatoria, (340, 130), font, 1, (255,255,255), 1, cv2.LINE_AA)
             
-            media_cor, centro_frame, area_frame = putils.identifica_cor(copia2,'vermelho')
+            media_cor, centro_frame, area_frame = putils.identifica_cor(copia2,goal)
 
             area_cor = area_frame
             centro_cor = media_cor
 
-        #cv2.imshow("cv_image", cv_image)
+        cv2.imshow("cv_image", cv_image)
         
         cv2.waitKey(1)
     except CvBridgeError as e:
         print('ex', e)
-
-
-
 
 
 if __name__=="__main__":
@@ -257,7 +261,6 @@ if __name__=="__main__":
     recebedor = rospy.Subscriber(topico_imagem, CompressedImage, roda_todo_frame, queue_size=4, buff_size = 2**24)
 
     zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
-
 
     x = 0
     
@@ -295,8 +298,6 @@ if __name__=="__main__":
 
     segunda_volta = False
     
-    sair_rotatoria = False
-
     state = INICIAL
 
     area_ideal = 1100
@@ -334,7 +335,7 @@ if __name__=="__main__":
         vel = Twist(Vector3(0.2,0,0), Vector3(0,0,0.5)) 
         cmd_vel.publish(vel)
         
-    def CORTAR_MASK():
+    def cortar_mask():
         pass
         
     def virar_esquerda():
@@ -342,7 +343,7 @@ if __name__=="__main__":
         cmd_vel.publish(zero)
         rospy.sleep(0.5)
         w = 0.6
-        giro = math.radians(100)
+        giro = math.radians(65)
         delta_t = giro/w
         vel = Twist(Vector3(0,0,0), Vector3(0,0,w))
         cmd_vel.publish(vel)
@@ -379,8 +380,6 @@ if __name__=="__main__":
 
   
 
-
-
     def dispatch():
         "Logica de determinar o proximo estado"
         global state
@@ -396,16 +395,14 @@ if __name__=="__main__":
         global segunda_volta
         global angle_yellow
         global cv_image
-        
-
-           
+                   
         if state == VIRAR_ESQUERDA:
             rospy.sleep(1.5)
             segunda_volta = False
         
         if state == PARAR:
             w = 5
-            giro = math.radians(130)
+            giro = math.radians(135)
             delta_t = giro/w
             vel = Twist(Vector3(0,0,0), Vector3(0,0,w))
             cmd_vel.publish(vel)
@@ -428,10 +425,7 @@ if __name__=="__main__":
                       
         if state == TERMINOU:
             state = VOLTAR
-
-                    
-
-                            
+         
         if c_img[x] - tol_centro < centro_yellow[x] < c_img[x] + tol_centro:
             state = AVANCA
             if   - tol_ang< angle_yellow  < tol_ang:  # para angulos centrados na vertical, regressao de x = f(y) como está feito
@@ -467,20 +461,10 @@ if __name__=="__main__":
 
         if segunda_volta:
             if x_odom < x_bifurcacao and y_odom < y_bifurcacao:
-                if x_odom > x_bifurcacao - 0.3:
-                    str_fazendo_rot = " VAI BIFURCA NOVAMENTE"
+                if x_odom > x_bifurcacao - 0.45:
+                    str_fazendo_rot = "VAI BIFURCA NOVAMENTE"
                     cv2.putText(cv_image,str_fazendo_rot, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
-                    state = VIRAR_ESQUERDA
-                       
-                    # zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
-                    # cmd_vel.publish(zero)
-                    # rospy.sleep(0.5)
-                    # w = 2
-                    # giro = math.radians(90)
-                    # delta_t = giro/w
-                    # vel = Twist(Vector3(0,0,0), Vector3(0,0,w))
-                    # cmd_vel.publish(vel)
-                    # rospy.sleep(delta_t)             
+                    state = VIRAR_ESQUERDA     
         
 
         print("centro_yellow {} angle_yellow {:.3f} state: {}".format(centro_yellow, angle_yellow, state))
@@ -579,27 +563,17 @@ if __name__=="__main__":
                     str_fazendo_rot = " VAI BIFURCA NOVAMENTE"
                     cv2.putText(cv_image,str_fazendo_rot, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
                     state = VIRAR_ESQUERDA
-                       
-                    # zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
-                    # cmd_vel.publish(zero)
-                    # rospy.sleep(0.5)
-                    # w = 2
-                    # giro = math.radians(90)
-                    # delta_t = giro/w
-                    # vel = Twist(Vector3(0,0,0), Vector3(0,0,w))
-                    # cmd_vel.publish(vel)
-                    # rospy.sleep(delta_t)             
+                    
 
         if area_cor >= area_ideal and bater:
 
             if c_img[x] - tol_centro < centro_cor[x] < c_img[x] + tol_centro:
                 state = AVANCA
-                if area_cor > 12000: 
+                if area_cor > 14550: 
                     str_creeper = 'VAI BATER NO CREEPER'
-                    cv2.putText(copia2,str_creeper, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
+                    cv2.putText(copia2,str_creeper, (350, 100), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
                     state = TERMINOU 
                     state = VOLTAR
-                    print(bater)
                     bater = False
                     return  
             else: 
@@ -607,11 +581,9 @@ if __name__=="__main__":
 
         print("centro_cor {}  area_cor {}  state: {} ".format(centro_cor, area_cor, state))
 
-
-
     acoes = {INICIAL:inicial, AVANCA: avanca, AVANCA_RAPIDO: avanca_rapido, 
     ALINHA: alinha, TERMINOU: terminou, PARAR: parar, VIRAR_ESQUERDA: virar_esquerda, VIRAR_DIREITA: virar_direita,
-    CORTAR_MASK: CORTAR_MASK ,VOLTAR: voltar, FAZENDO_ROTATORIA:fazendo_rotatoria, ALINHA_COR: alinha_cor}
+    CORTAR_MASK: cortar_mask ,VOLTAR: voltar, FAZENDO_ROTATORIA:fazendo_rotatoria, ALINHA_COR: alinha_cor}
 
 
     r = rospy.Rate(200) 
@@ -621,7 +593,7 @@ if __name__=="__main__":
         while not rospy.is_shutdown():
             print("Estado: ", state)       
             acoes[state]()  # executa a funcão que está no dicionário
-            # dispatch()       
+            #dispatch()       
             achaCreeper()     
             r.sleep()
 

@@ -235,11 +235,11 @@ def identifica_cor(frame, cor):
     # Representa a area e o centro do maior contorno no frame
     font = cv2.FONT_HERSHEY_COMPLEX_SMALL
     cv2.putText(frame," CENTRO COR {:d} {:d}".format(*media),(300,50), 1, 1, (0,0,0),2,cv2.LINE_AA)
-    cv2.putText(frame,"AREA COR {:0.1f}".format(maior_contorno_area),(300,150), 1, 1 , (0,0,0), 1 ,cv2.LINE_AA)
+    cv2.putText(frame,"AREA COR {:0.1f}".format(maior_contorno_area),(300,80), 1, 1 , (0,0,0), 2 ,cv2.LINE_AA)
     
 
    # cv2.imshow('video', frame)
-    cv2.imshow('seg', frame)
+    cv2.imshow('Filtra Creeper', frame)
 
     return media, centro, maior_contorno_area
 
