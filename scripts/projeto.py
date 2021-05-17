@@ -16,20 +16,28 @@ from tf import transformations
 from tf import TransformerROS
 import tf2_ros
 from geometry_msgs.msg import Twist, Vector3, Pose, Vector3Stamped
-
+import cv2.aruco as aruco
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Header
-
-
 from sklearn.linear_model import LinearRegression
+import visao_module
+import projeto_utils as utils 
+
+
+#roslaunch my_simulation forca.launch
+
+
+#Biblioteca para automacao do teclado e tela
+#python3 -m pip install pyautogui
+import pyautogui
+
+#python3 -m pip install python-time
+import time 
+
 
 #print("EXECUTE ANTES da 1.a vez: ")
 #print("wget https://github.com/Insper/robot21.1/raw/main/projeto/ros_projeto/scripts/MobileNetSSD_deploy.caffemodel")
 #print("PARA TER OS PESOS DA REDE NEURAL")
-
-
-import visao_module
-
 
 bridge = CvBridge()
 
@@ -55,112 +63,84 @@ id = 0
 frame = "camera_link"
 # frame = "head_camera"  # DESCOMENTE para usar com webcam USB via roslaunch tag_tracking usbcam
 
+#-- Font for the text in the image
+font = cv2.FONT_HERSHEY_PLAIN
+
 tfl = 0
 
 tf_buffer = tf2_ros.Buffer()
 
-def encontrar_centro_dos_contornos(img, contornos):
-    """Não mude ou renomeie esta função
-        deve receber um contorno e retornar, respectivamente, a imagem com uma cruz no centro de cada segmento e o centro dele. formato: img, x, y
+ponto_fuga = (320, 240)   
+
+angulo = 90
+
+vel = Twist(Vector3(1,0,0), Vector3(0,0,0))
+
+seguir = True
+bifurcar_direita = False
+bifurcar_esquerda = False
+voltar = False
+
+ids = 0 
+id_to_find  = 100
+marker_size  = 25 
+#--- Get the camera calibration path
+calib_path  = "/home/borg/catkin_ws/src/robot202/ros/exemplos202/scripts/"
+camera_matrix   = np.loadtxt(calib_path+'cameraMatrix_raspi.txt', delimiter=',')
+camera_distortion   = np.loadtxt(calib_path+'cameraDistortion_raspi.txt', delimiter=',')
+
+aruco_dict  = aruco.getPredefinedDictionary(aruco.DICT_6X6_250)
+parameters  = aruco.DetectorParameters_create()
+parameters.minDistanceToBorder = 0
+
+scan_dist = 0
+
+distance = 0
+distancenp = 0
+
+#zero = Twist(Vector3(0,0,0), Vector3(0,0,0))
+#esq = Twist(Vector3(0.1,0,0), Vector3(0,0,0.2))
+#dire = Twist(Vector3(0.1,0,0), Vector3(0,0,-0.2))    
+#frente = Twist(Vector3(0.4,0,0), Vector3(0,0,0))  
+
+
+x = -1000
+y = -1000
+z = -1000
+
+topico_odom = "/odom"
+
+def recebeu_leitura(dado):
     """
-    centrox = []
-    centroy = []
-
-    for i in contornos:
-        centro_x2, centro_y2 = center_of_mass(i)
-        centrox.append(centro_x2)
-        centroy.append(centro_y2)
-        crosshair(img,(centro_x2, centro_y2), 5, (255,0,0))
-
-    return img, centrox, centroy
-
-def encontrar_contornos(mask):
-    """Não mude ou renomeie esta função
-        deve receber uma imagem preta e branca os contornos encontrados
+        Grava nas variáveis x,y,z a posição extraída da odometria
+        Atenção: *não coincidem* com o x,y,z locais do drone
     """
-    contornos, arvore = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    global x
+    global y 
+    global z 
 
-    return contornos
-
-def crosshair(img, point, size, color):
-    """ Desenha um crosshair centrado no point.
-        point deve ser uma tupla (x,y)
-        color é uma tupla R,G,B uint8
-    """
-    x,y = point
-    cv2.line(img,(x - size,y),(x + size,y),color,2)
-    cv2.line(img,(x,y - size),(x, y + size),color,2)
-
-def center_of_mass(mask):
-    """ Retorna uma tupla (cx, cy) que desenha o centro do contorno"""
-    M = cv2.moments(mask)
-    # Usando a expressão do centróide definida em: https://en.wikipedia.org/wiki/Image_moment
-    
-    m00 = M["m00"]
-
-    if m00 == 0:
-        m00 = 1
-
-    cX = int(M["m10"] / m00)
-    cY = int(M["m01"] / m00)
-    return [int(cX), int(cY)]
-
-def center_of_mass_region(mask, x1, y1, x2, y2):
-    # Para fins de desenho
-    mask_bgr = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
-    clipped = mask[y1:y2, x1:x2]
-    c = center_of_mass(clipped)
-    c[0]+=x1
-    c[1]+=y1
-    crosshair(mask_bgr, c, 10, (0,0,255))
-    cv2.rectangle(mask_bgr, (x1, y1), (x2, y2), (255,0,0),2,cv2.LINE_AA)
-    return mask_bgr
+    x = dado.pose.pose.position.x
+    y = dado.pose.pose.position.y
+    z = dado.pose.pose.position.z
 
 
-def desenhar_linha_entre_pontos(img, X, Y, color):
-    """Não mude ou renomeie esta função
-        deve receber uma lista de coordenadas XY, e retornar uma imagem com uma linha entre os centros EM SEQUENCIA do mais proximo.
-    """
-    for i in range(1,len(X)):
-        cv2.line(img,(X[i-1],Y[i-1]),(X[i],Y[i]),color,2)
-    
-    return img
-
-def regressao_por_centro(img, x,y):
-    """Não mude ou renomeie esta função
-        deve receber uma lista de coordenadas XY, e estimar a melhor reta, utilizando o metodo preferir, que passa pelos centros. Retorne a imagem com a reta e os parametros da reta
-        
-        Dica: cv2.line(img,ponto1,ponto2,color,2) desenha uma linha que passe entre os pontos, mesmo que ponto1 e ponto2 não pertençam a imagem.
-    """
-    x_shape = np.array(x)
-    y_shape = np.array(y)
-
-    x_shape = x_shape.reshape(-1,1)
-    y_shape = y_shape.reshape(-1,1)
-
-    regression = LinearRegression()
-
-    regression.fit(x_shape, y_shape)
-
-    w, z = regression.coef_, regression.intercept_
-
-    a_1 = 100
-    a_2 = 10000
-    b_1 = int((a_1*w+z))
-    b_2 = int((a_2*w+z))
-    ponto_a = (a_1,b_1)
-    ponto_b = (a_2,b_2)
-
-    print(ponto_a, ponto_b)
-
-    cor = (255,0,0)
-
-    cv2.line(img,ponto_a,ponto_b,cor,2)
-
-    return img, (w, z)
-
-
+ 
 def image_callback(img_cv):
+    global angulo 
+    global ids
+    global distancenp
+    global vel 
+    global distance
+    global distancenp
+    global tvec
+    global seguir
+    global bifurcar_direita
+    global bifurcar_esquerda
+    global voltar
+    global x
+    global y
+    global z 
+
     # BEGIN BRIDGE
     #image = bridge.imgmsg_to_cv2(msg)
     # END BRIDGE
@@ -176,35 +156,121 @@ def image_callback(img_cv):
     kernel = np.ones((5,5),np.uint8)
 
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+
+    mask_copy_esquerda = mask.copy()
+    mask_copy_direita = mask.copy()
+
+    mask_esquerda  = mask_copy_esquerda[:,0:320]
+    mask_direita = mask_copy_direita[:,390:]
+
+    #cv2.imshow("Mascara Esquerda", mask_esquerda)
+    #cv2.imshow("Mascara Direita", mask_direita)
+
+    str_odom = "X=%4.2f Y=%4.2f  Z =%4.2f"%(x,y,z)
+
+
     # END FILTER
     masked = cv2.bitwise_and(img_cv, img_cv, mask=mask)
-    cv2.imshow("Filtra Amarelo", mask ) 
-    cv2.waitKey(3)
 
     #bgr = cv2.cvtColor(HSV, cv2.COLOR_HSV2BGR)\
     bgr = img_cv.copy()
 
-    contornos = encontrar_contornos(mask)
-    cv2.drawContours(mask, contornos, -1, [0, 0, 255], 2)
 
-    mask_bgr = center_of_mass_region(mask, 20, 400, bgr.shape[1] - 80, bgr.shape[0]-100)
 
+    if seguir:
+        str_estado = 'Entrou no estado SEGUIR'
+        angulo, img = utils.escolhe_mascara_regressao(mask,bgr)
+        cv2.putText(img, str_odom, (0, 150), cv2.FONT_HERSHEY_PLAIN, 1, (0, 255, 0), 1, cv2.LINE_AA)
+        cv2.putText(img, str_estado, (0, 200), cv2.FONT_HERSHEY_PLAIN, 1, (0, 255, 0), 1, cv2.LINE_AA)
+        x_1 = x
+
+        if x_1 > -1.8 and distance>200:
+
+            if angulo is None:
+                vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
+
+            else:
+
+                if angulo > 90:
+                    if angulo < 150:
+                        vel = Twist(Vector3(0.1,0,0), Vector3(0,0,-0.2))
+                    else:
+                        vel = Twist(Vector3(0.4,0,0), Vector3(0,0,0)) 
+                else:
+                    if angulo > 30:
+                        vel = Twist(Vector3(0.1,0,0), Vector3(0,0,0.2))
+                    else:
+                        vel = Twist(Vector3(0.4,0,0), Vector3(0,0,0))  
+
+        else:
+            vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
+            seguir, bifurcar_direita = False, True
+
+
+    elif bifurcar_direita:
+        str_estado = 'Entrou no estado BIFURCAR DIREITA'
+        angulo, img = utils.escolhe_mascara_regressao(mask_direita,bgr)
+        cv2.putText(img, str_odom, (0, 150), cv2.FONT_HERSHEY_PLAIN, 1, (0, 255, 0), 1, cv2.LINE_AA)
+        cv2.putText(img, str_estado, (0, 200), cv2.FONT_HERSHEY_PLAIN, 1, (0, 255, 0), 1, cv2.LINE_AA)
+        #utils.girar(math.radians(45),-0.2)
+        x_2 = x
+
+        if x_2 > -4.6 and distance >50:
+
+            if angulo is None:
+                vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
+
+            else:
+
+                if angulo > 90:
+                    if angulo < 150:
+                        vel = Twist(Vector3(0.1,0,0), Vector3(0,0,-0.2))
+                    else:
+                        vel = Twist(Vector3(0.4,0,0), Vector3(0,0,0)) 
+                else:
+                    if angulo > 30:
+                        vel = Twist(Vector3(0.1,0,0), Vector3(0,0,0.2))
+                    else:
+                        vel = Twist(Vector3(0.4,0,0), Vector3(0,0,0))
+
+        else:
+            vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
+            bifurcar_direita,voltar =  False, True
+
+
+    elif voltar:
+
+        angulo, img = utils.escolhe_mascara_regressao(mask,bgr)
+
+        if angulo is None:
+                vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
+
+        else:
+
+            if angulo > 90:
+                if angulo < 150:
+                    vel = Twist(Vector3(0.1,0,0), Vector3(0,0,-0.2))
+                else:
+                    vel = Twist(Vector3(0.4,0,0), Vector3(0,0,0)) 
+            else:
+                if angulo > 30:
+                    vel = Twist(Vector3(0.1,0,0), Vector3(0,0,0.2))
+                else:
+                    vel = Twist(Vector3(0.4,0,0), Vector3(0,0,0))
+
+
+    cv2.imshow("Regressao Linear", img)
     
-    img, X, Y = encontrar_centro_dos_contornos(mask_bgr, contornos)
+   
 
-    img = desenhar_linha_entre_pontos(mask_bgr, X,Y, (255,0,0))
-
-    
-
-    # Regressão Linear
-    
-    ## Regressão pelo centro
-    img, lm = regressao_por_centro(img, X,Y)
-
-    cv2.imshow("Regressao", img)
     cv2.waitKey(3)
 
 
+def scaneou(dado):
+	#print("scan")
+	global scan_dist 
+	scan_dist = dado.ranges[0]*100
+	return scan_dist
 
 
 # A função a seguir é chamada sempre que chega um novo frame
@@ -214,6 +280,10 @@ def roda_todo_frame(imagem):
     global media
     global centro
     global resultados
+    global ids
+    global distance
+    global distancenp
+    global img 
 
     now = rospy.get_rostime()
     imgtime = imagem.header.stamp
@@ -229,48 +299,131 @@ def roda_todo_frame(imagem):
         temp_image = bridge.compressed_imgmsg_to_cv2(imagem, "bgr8")
         # Note que os resultados já são guardados automaticamente na variável
         # chamada resultados
-        centro, saida_net, resultados =  visao_module.processa(temp_image)        
+        #centro, saida_net, resultados =  visao_module.processa(temp_image)        
         for r in resultados:
             # print(r) - print feito para documentar e entender
             # o resultado            
             pass
 
         # Desnecessário - Hough e MobileNet já abrem janelas
-        cv_image = saida_net.copy()
+        #cv_image = saida_net.copy()
+        cv_image = temp_image.copy()
         saida_amarelo = image_callback(cv_image)
+
+        gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
+        corners, ids, rejectedImgPoints = aruco.detectMarkers(gray, aruco_dict, parameters=parameters)
+        #print(ids)
+
+        if ids is not None and ids[0]==id_to_find:
+            #-- ret = [rvec, tvec, ?]
+            #-- rvec = [[rvec_1], [rvec_2], ...] vetor de rotação
+            #-- tvec = [[tvec_1], [tvec_2], ...] vetor de translação
+            ret = aruco.estimatePoseSingleMarkers(corners, marker_size, camera_matrix, camera_distortion)
+            rvec, tvec = ret[0][0,0,:], ret[1][0,0,:]
+
+            #-- Desenha um retanculo e exibe Id do marker encontrado
+            aruco.drawDetectedMarkers(cv_image, corners, ids) 
+            aruco.drawAxis(cv_image, camera_matrix, camera_distortion, rvec, tvec, 1)
+
+            #-- Print tvec vetor de tanslação em x y z
+            str_position = "Marker x=%4.0f  y=%4.0f  z=%4.0f"%(tvec[0], tvec[1], tvec[2])
+            #print(str_position)
+            cv2.putText(cv_image, str_position, (0, 100), font, 1, (0, 255, 0), 1, cv2.LINE_AA)
+
+            ##############----- Referencia dos Eixos------###########################
+            # Linha referencia em X
+            #cv2.line(cv_image, (cv_image.shape[1]/2,cv_image.shape[0]/2), ((cv_image.shape[1]/2 + 50),(cv_image.shape[0]/2)), (0,0,255), 5) 
+            # Linha referencia em Y
+            #cv2.line(cv_image, (cv_image.shape[1]/2,cv_image.shape[0]/2), (cv_image.shape[1]/2,(cv_image.shape[0]/2 + 50)), (0,255,0), 5) 	
+
+            #####################---- Distancia Euclidiana ----#####################
+            # Calcula a distancia usando apenas a matriz tvec, matriz de tanslação
+            # Pode usar qualquer uma das duas formas
+            distance = np.sqrt(tvec[0]**2 + tvec[1]**2 + tvec[2]**2)
+            distancenp = np.linalg.norm(tvec)
+
+            #-- Print distance
+            str_dist = "Dist aruco=%4.0f  dis.np=%4.0f"%(distance, distancenp)
+            #print(str_dist)
+            cv2.putText(cv_image, str_dist, (0, 15), font, 1, (0, 255, 0), 1, cv2.LINE_AA)
+
+            #####################---- Distancia pelo foco ----#####################
+            #https://www.pyimagesearch.com/2015/01/19/find-distance-camera-objectmarker-using-python-opencv/
+
+            # raspicam v2 focal legth 
+            FOCAL_LENGTH = 3.6 #3.04
+            # pixel por unidade de medida
+            m = (camera_matrix[0][0]/FOCAL_LENGTH + camera_matrix[1][1]/FOCAL_LENGTH)/2
+            # corners[0][0][0][0] = [ID][plano?][pos_corner(sentido horario)][0=valor_pos_x, 1=valor_pos_y]	
+            pixel_length1 = math.sqrt(math.pow(corners[0][0][0][0] - corners[0][0][1][0], 2) + math.pow(corners[0][0][0][1] - corners[0][0][1][1], 2))
+            pixel_length2 = math.sqrt(math.pow(corners[0][0][2][0] - corners[0][0][3][0], 2) + math.pow(corners[0][0][2][1] - corners[0][0][3][1], 2))
+            pixlength = (pixel_length1+pixel_length2)/2
+            dist = marker_size * FOCAL_LENGTH / (pixlength/m)
+
+            #-- Print distancia focal
+            str_distfocal = "Dist focal=%4.0f"%(dist)
+            #print(str_distfocal)
+            cv2.putText(cv_image, str_distfocal, (0, 30), font, 1, (0, 255, 0), 1, cv2.LINE_AA)	
+
+
+            ####################--------- desenha o cubo -----------#########################
+            # https://github.com/RaviJoshii/3DModeler/blob/eb7ca48fa06ca85fcf5c5ec9dc4b562ce9a22a76/opencv/program/detect.py			
+            m = marker_size/2
+            pts = np.float32([[-m,m,m], [-m,-m,m], [m,-m,m], [m,m,m],[-m,m,0], [-m,-m,0], [m,-m,0], [m,m,0]])
+            imgpts, _ = cv2.projectPoints(pts, rvec, tvec, camera_matrix, camera_distortion)
+            imgpts = np.int32(imgpts).reshape(-1,2)
+            cv_image = cv2.drawContours(cv_image, [imgpts[:4]],-1,(0,0,255),4)
+            for i,j in zip(range(4),range(4,8)): cv_image = cv2.line(cv_image, tuple(imgpts[i]), tuple(imgpts[j]),(0,0,255),4);
+            cv_image = cv2.drawContours(cv_image, [imgpts[4:]],-1,(0,0,255),4)
+
+            
+		
+        
         cv2.imshow("cv_image", cv_image)
         cv2.waitKey(1)
+
     except CvBridgeError as e:
         print('ex', e)
     
+
 if __name__=="__main__":
     rospy.init_node("cor")
 
 
     topico_imagem = "/camera/image/compressed"
-
     recebedor = rospy.Subscriber(topico_imagem, CompressedImage, roda_todo_frame, queue_size=4, buff_size = 2**24)
+    recebe_scan = rospy.Subscriber(topico_odom, Odometry , recebeu_leitura)
+    #recebe_scan = rospy.Subscriber("/scan", LaserScan, scaneou)
 
 
-    print("Usando ", topico_imagem)
+    #print("Usando ", topico_imagem)
 
     velocidade_saida = rospy.Publisher("/cmd_vel", Twist, queue_size = 1)
 
     tfl = tf2_ros.TransformListener(tf_buffer) #conversao do sistema de coordenadas 
     tolerancia = 25
+   
+    centro  = 320
+    margem = 5
 
     try:
-        # Inicializando - por default gira no sentido anti-horário
-        vel = Twist(Vector3(0,0,0), Vector3(0,0,math.pi/10.0))
+               
         
         while not rospy.is_shutdown():
-            for r in resultados:
-                print(r)
-            
+            print("x {} y {} z {}".format(x, y, z))
             velocidade_saida.publish(vel)
             rospy.sleep(0.1)
 
+            #for r in resultados:
+                #print(r)
+
+
     except rospy.ROSInterruptException:
         print("Ocorreu uma exceção com o rospy")
+        #codigo para dar restart na posicao original do robo --> depois que apertar ctrl+c
+        
+        """pyautogui.click(800,800) #clica em um ponto x a tela para pegar a window do gazebo
+        time.sleep(1) #espera um segundo
+        pyautogui.hotkey('ctrl', 'r')#aperta ctrl + r """
 
 
