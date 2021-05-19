@@ -2,42 +2,39 @@
 # -*- coding:utf-8 -*-
 
 from __future__ import print_function, division
-import rospy
+
+from numpy.core.fromnumeric import put
+
+import rospy 
 import numpy as np
-import numpy
-import tf
-import math
 import cv2
-from nav_msgs.msg import Odometry
-from sensor_msgs.msg import Image, CompressedImage
-from cv_bridge import CvBridge, CvBridgeError
-from numpy import linalg
+import tf
 from tf import transformations
 from tf import TransformerROS
 import tf2_ros
+from geometry_msgs.msg import Twist, Vector3
+from sensor_msgs.msg import LaserScan
+from sensor_msgs.msg import Image, CompressedImage
+from cv_bridge import CvBridge, CvBridgeError
+from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist, Vector3, Pose, Vector3Stamped
 import cv2.aruco as aruco
-from nav_msgs.msg import Odometry
-from std_msgs.msg import Header
-from sklearn.linear_model import LinearRegression
+from scipy.spatial.transform import Rotation as R
 import visao_module
-import projeto_utils as utils 
+import math
+import projeto_utils as putils
 
+# Para rodar a simulacao faca : roslaunch my_simulation forca.launch
+# Para rodar o progama: rosrun ros_projeto projeto.py
 
-#roslaunch my_simulation forca.launch
+# ------------------------------------- DEFININDO AS VARIAVEIS ----------------------------------------------------------------------------------------------------------------
+id = 0
 
-
-#Biblioteca para automacao do teclado e tela
-#python3 -m pip install pyautogui
-import pyautogui
-
-#python3 -m pip install python-time
-import time 
-
-
-#print("EXECUTE ANTES da 1.a vez: ")
-#print("wget https://github.com/Insper/robot21.1/raw/main/projeto/ros_projeto/scripts/MobileNetSSD_deploy.caffemodel")
-#print("PARA TER OS PESOS DA REDE NEURAL")
+#-- Font for the text in the image
+font = cv2.FONT_HERSHEY_PLAIN
+ranges = None
+minv = 0
+maxv = 10
 
 bridge = CvBridge()
 
@@ -46,42 +43,28 @@ media = []
 centro = []
 atraso = 1.5E9 # 1 segundo e meio. Em nanossegundos
 
-
-area = 0.0 # Variavel com a area do maior contorno
-
-# Só usar se os relógios ROS da Raspberry e do Linux desktop estiverem sincronizados. 
-# Descarta imagens que chegam atrasadas demais
-check_delay = False 
-
-resultados = [] # Criacao de uma variavel global para guardar os resultados vistos
-
-x = 0
-y = 0
-z = 0 
-id = 0
-
 frame = "camera_link"
 # frame = "head_camera"  # DESCOMENTE para usar com webcam USB via roslaunch tag_tracking usbcam
 
-#-- Font for the text in the image
-font = cv2.FONT_HERSHEY_PLAIN
+x_odom = -1000
+y_odom = -1000
 
-tfl = 0
+## Variáveis novas criadas pelo gabarito
 
-tf_buffer = tf2_ros.Buffer()
+centro_yellow = (320,240)
+frame = 0
+skip = 3
+m = 0
+angle_yellow = 0 # angulo com a vertical
 
-ponto_fuga = (320, 240)   
+low = putils.low
+high = putils.high
 
-angulo = 90
+## 
+distancia = 0
+distance = 0
 
-vel = Twist(Vector3(1,0,0), Vector3(0,0,0))
-
-seguir = True
-bifurcar_direita = False
-bifurcar_esquerda = False
-voltar = False
-
-ids = 0 
+ids = []
 id_to_find  = 100
 marker_size  = 25 
 #--- Get the camera calibration path
@@ -93,337 +76,438 @@ aruco_dict  = aruco.getPredefinedDictionary(aruco.DICT_6X6_250)
 parameters  = aruco.DetectorParameters_create()
 parameters.minDistanceToBorder = 0
 
-scan_dist = 0
+x_bifurcacao = 1000
+y_bifurcacao = 1000
+x_rotatoria = 1000
+y_rotatoria = 1000
 
-distance = 0
-distancenp = 0
+acha_cor = None
 
-#zero = Twist(Vector3(0,0,0), Vector3(0,0,0))
-#esq = Twist(Vector3(0.1,0,0), Vector3(0,0,0.2))
-#dire = Twist(Vector3(0.1,0,0), Vector3(0,0,-0.2))    
-#frente = Twist(Vector3(0.4,0,0), Vector3(0,0,0))  
+centro_cor = (320, 240)
+area_cor = 0
 
+bater = True
 
-x = -1000
-y = -1000
-z = -1000
+identificaCreeper  = False
 
-topico_odom = "/odom"
+goal = 'azul'
+
+# -------------------------------------- FUNCOES DE POSICOES E SENSORES ----------------------------------------------------------------------------------------------------------------------------
+
+def quart_to_euler(orientacao):
+    """
+    Converter quart. para euler (XYZ)
+    Retorna apenas o Yaw (wz)
+    """
+    r = R.from_quat(orientacao)
+    wx, wy, wz = (r.as_euler('xyz', degrees=True))
+
+    return wz
+
 
 def recebeu_leitura(dado):
     """
         Grava nas variáveis x,y,z a posição extraída da odometria
         Atenção: *não coincidem* com o x,y,z locais do drone
     """
-    global x
-    global y 
-    global z 
-
-    x = dado.pose.pose.position.x
-    y = dado.pose.pose.position.y
-    z = dado.pose.pose.position.z
-
-
- 
-def image_callback(img_cv):
-    global angulo 
-    global ids
-    global distancenp
-    global vel 
-    global distance
-    global distancenp
-    global tvec
-    global seguir
-    global bifurcar_direita
-    global bifurcar_esquerda
-    global voltar
-    global x
-    global y
-    global z 
-
-    # BEGIN BRIDGE
-    #image = bridge.imgmsg_to_cv2(msg)
-    # END BRIDGE
-    # BEGIN HSV
-    hsv = cv2.cvtColor(img_cv, cv2.COLOR_BGR2HSV)
-    # END HSV
-    # BEGIN FILTER
-
-    lower_yellow = numpy.array([25, 50, 50])
-    upper_yellow = numpy.array([35, 255, 255])
-    mask = cv2.inRange(hsv, lower_yellow, upper_yellow)
+    global x_odom
+    global y_odom
+    x_odom = dado.pose.pose.position.x
+    y_odom = dado.pose.pose.position.y
     
-    kernel = np.ones((5,5),np.uint8)
 
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+## ROS
+def mypose(msg):
+    """
+    Recebe a Leitura da Odometria.
+    Para esta aplicacao, apenas a orientacao esta sendo usada
+    """   
+    x = msg.pose.pose.orientation.x
+    y = msg.pose.pose.orientation.y
+    z = msg.pose.pose.orientation.z
+    w = msg.pose.pose.orientation.w
 
-    mask_copy_esquerda = mask.copy()
-    mask_copy_direita = mask.copy()
-
-    mask_esquerda  = mask_copy_esquerda[:,0:320]
-    mask_direita = mask_copy_direita[:,390:]
-
-    #cv2.imshow("Mascara Esquerda", mask_esquerda)
-    #cv2.imshow("Mascara Direita", mask_direita)
-
-    str_odom = "X=%4.2f Y=%4.2f  Z =%4.2f"%(x,y,z)
-
-
-    # END FILTER
-    masked = cv2.bitwise_and(img_cv, img_cv, mask=mask)
-
-    #bgr = cv2.cvtColor(HSV, cv2.COLOR_HSV2BGR)\
-    bgr = img_cv.copy()
-
-
-
-    if seguir:
-        str_estado = 'Entrou no estado SEGUIR'
-        angulo, img = utils.escolhe_mascara_regressao(mask,bgr)
-        cv2.putText(img, str_odom, (0, 150), cv2.FONT_HERSHEY_PLAIN, 1, (0, 255, 0), 1, cv2.LINE_AA)
-        cv2.putText(img, str_estado, (0, 200), cv2.FONT_HERSHEY_PLAIN, 1, (0, 255, 0), 1, cv2.LINE_AA)
-        x_1 = x
-
-        if x_1 > -1.8 and distance>200:
-
-            if angulo is None:
-                vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
-
-            else:
-
-                if angulo > 90:
-                    if angulo < 150:
-                        vel = Twist(Vector3(0.1,0,0), Vector3(0,0,-0.2))
-                    else:
-                        vel = Twist(Vector3(0.4,0,0), Vector3(0,0,0)) 
-                else:
-                    if angulo > 30:
-                        vel = Twist(Vector3(0.1,0,0), Vector3(0,0,0.2))
-                    else:
-                        vel = Twist(Vector3(0.4,0,0), Vector3(0,0,0))  
-
-        else:
-            vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
-            seguir, bifurcar_direita = False, True
-
-
-    elif bifurcar_direita:
-        str_estado = 'Entrou no estado BIFURCAR DIREITA'
-        angulo, img = utils.escolhe_mascara_regressao(mask_direita,bgr)
-        cv2.putText(img, str_odom, (0, 150), cv2.FONT_HERSHEY_PLAIN, 1, (0, 255, 0), 1, cv2.LINE_AA)
-        cv2.putText(img, str_estado, (0, 200), cv2.FONT_HERSHEY_PLAIN, 1, (0, 255, 0), 1, cv2.LINE_AA)
-        #utils.girar(math.radians(45),-0.2)
-        x_2 = x
-
-        if x_2 > -4.6 and distance >50:
-
-            if angulo is None:
-                vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
-
-            else:
-
-                if angulo > 90:
-                    if angulo < 150:
-                        vel = Twist(Vector3(0.1,0,0), Vector3(0,0,-0.2))
-                    else:
-                        vel = Twist(Vector3(0.4,0,0), Vector3(0,0,0)) 
-                else:
-                    if angulo > 30:
-                        vel = Twist(Vector3(0.1,0,0), Vector3(0,0,0.2))
-                    else:
-                        vel = Twist(Vector3(0.4,0,0), Vector3(0,0,0))
-
-        else:
-            vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
-            bifurcar_direita,voltar =  False, True
-
-
-    elif voltar:
-
-        angulo, img = utils.escolhe_mascara_regressao(mask,bgr)
-
-        if angulo is None:
-                vel = Twist(Vector3(0,0,0), Vector3(0,0,0))
-
-        else:
-
-            if angulo > 90:
-                if angulo < 150:
-                    vel = Twist(Vector3(0.1,0,0), Vector3(0,0,-0.2))
-                else:
-                    vel = Twist(Vector3(0.4,0,0), Vector3(0,0,0)) 
-            else:
-                if angulo > 30:
-                    vel = Twist(Vector3(0.1,0,0), Vector3(0,0,0.2))
-                else:
-                    vel = Twist(Vector3(0.4,0,0), Vector3(0,0,0))
-
-
-    cv2.imshow("Regressao Linear", img)
-    
-   
-
-    cv2.waitKey(3)
+    orientacao_robo = [[x,y,z,w]]
 
 
 def scaneou(dado):
-	#print("scan")
-	global scan_dist 
-	scan_dist = dado.ranges[0]*100
-	return scan_dist
+    """
+    Rebe a Leitura do Lidar
+    Para esta aplicacao, apenas a menor distancia esta sendo usada
+    """
+    global distancia
+    
+    ranges = np.array(dado.ranges).round(decimals=2)
+    #distancia = ranges[0]
+    min_comeco = min(ranges[0:15])
+    min_fim = min(ranges[345:360])
+    distancia = min([min_comeco, min_fim])
 
 
 # A função a seguir é chamada sempre que chega um novo frame
 def roda_todo_frame(imagem):
-    print("frame")
+    global centro_yellow
+    global m
+    global angle_yellow
     global cv_image
-    global media
-    global centro
     global resultados
     global ids
     global distance
     global distancenp
-    global img 
+    global state
+    global x_odom
+    global y_odom
+    global state
+    global distancia 
+    global ids
+    global x_bifurcacao
+    global y_bifurcacao
+    global x_rotatoria
+    global y_rotatoria
+    global centro_cor
+    global area_cor
+    global goal
+    global identificaCreeper
+       
 
-    now = rospy.get_rostime()
-    imgtime = imagem.header.stamp
-    lag = now-imgtime # calcula o lag
-    delay = lag.nsecs
-    # print("delay ", "{:.3f}".format(delay/1.0E9))
-    if delay > atraso and check_delay==True:
-        # Esta logica do delay so' precisa ser usada com robo real e rede wifi 
-        # serve para descartar imagens antigas
-        print("Descartando por causa do delay do frame:", delay)
-        return 
     try:
-        temp_image = bridge.compressed_imgmsg_to_cv2(imagem, "bgr8")
-        # Note que os resultados já são guardados automaticamente na variável
-        # chamada resultados
-        #centro, saida_net, resultados =  visao_module.processa(temp_image)        
-        for r in resultados:
-            # print(r) - print feito para documentar e entender
-            # o resultado            
-            pass
-
-        # Desnecessário - Hough e MobileNet já abrem janelas
-        #cv_image = saida_net.copy()
-        cv_image = temp_image.copy()
-        saida_amarelo = image_callback(cv_image)
+        cv_image = bridge.compressed_imgmsg_to_cv2(imagem, "bgr8")
+        #cv2.imshow("Camera", cv_image)
+        ##
+        copia = cv_image.copy() # se precisar usar no while
 
         gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
         corners, ids, rejectedImgPoints = aruco.detectMarkers(gray, aruco_dict, parameters=parameters)
-        #print(ids)
 
-        if ids is not None and ids[0]==id_to_find:
-            #-- ret = [rvec, tvec, ?]
-            #-- rvec = [[rvec_1], [rvec_2], ...] vetor de rotação
-            #-- tvec = [[tvec_1], [tvec_2], ...] vetor de translação
-            ret = aruco.estimatePoseSingleMarkers(corners, marker_size, camera_matrix, camera_distortion)
-            rvec, tvec = ret[0][0,0,:], ret[1][0,0,:]
-
-            #-- Desenha um retanculo e exibe Id do marker encontrado
-            aruco.drawDetectedMarkers(cv_image, corners, ids) 
-            aruco.drawAxis(cv_image, camera_matrix, camera_distortion, rvec, tvec, 1)
-
-            #-- Print tvec vetor de tanslação em x y z
-            str_position = "Marker x=%4.0f  y=%4.0f  z=%4.0f"%(tvec[0], tvec[1], tvec[2])
-            #print(str_position)
-            cv2.putText(cv_image, str_position, (0, 100), font, 1, (0, 255, 0), 1, cv2.LINE_AA)
-
-            ##############----- Referencia dos Eixos------###########################
-            # Linha referencia em X
-            #cv2.line(cv_image, (cv_image.shape[1]/2,cv_image.shape[0]/2), ((cv_image.shape[1]/2 + 50),(cv_image.shape[0]/2)), (0,0,255), 5) 
-            # Linha referencia em Y
-            #cv2.line(cv_image, (cv_image.shape[1]/2,cv_image.shape[0]/2), (cv_image.shape[1]/2,(cv_image.shape[0]/2 + 50)), (0,255,0), 5) 	
-
-            #####################---- Distancia Euclidiana ----#####################
-            # Calcula a distancia usando apenas a matriz tvec, matriz de tanslação
-            # Pode usar qualquer uma das duas formas
-            distance = np.sqrt(tvec[0]**2 + tvec[1]**2 + tvec[2]**2)
-            distancenp = np.linalg.norm(tvec)
-
-            #-- Print distance
-            str_dist = "Dist aruco=%4.0f  dis.np=%4.0f"%(distance, distancenp)
-            #print(str_dist)
-            cv2.putText(cv_image, str_dist, (0, 15), font, 1, (0, 255, 0), 1, cv2.LINE_AA)
-
-            #####################---- Distancia pelo foco ----#####################
-            #https://www.pyimagesearch.com/2015/01/19/find-distance-camera-objectmarker-using-python-opencv/
-
-            # raspicam v2 focal legth 
-            FOCAL_LENGTH = 3.6 #3.04
-            # pixel por unidade de medida
-            m = (camera_matrix[0][0]/FOCAL_LENGTH + camera_matrix[1][1]/FOCAL_LENGTH)/2
-            # corners[0][0][0][0] = [ID][plano?][pos_corner(sentido horario)][0=valor_pos_x, 1=valor_pos_y]	
-            pixel_length1 = math.sqrt(math.pow(corners[0][0][0][0] - corners[0][0][1][0], 2) + math.pow(corners[0][0][0][1] - corners[0][0][1][1], 2))
-            pixel_length2 = math.sqrt(math.pow(corners[0][0][2][0] - corners[0][0][3][0], 2) + math.pow(corners[0][0][2][1] - corners[0][0][3][1], 2))
-            pixlength = (pixel_length1+pixel_length2)/2
-            dist = marker_size * FOCAL_LENGTH / (pixlength/m)
-
-            #-- Print distancia focal
-            str_distfocal = "Dist focal=%4.0f"%(dist)
-            #print(str_distfocal)
-            cv2.putText(cv_image, str_distfocal, (0, 30), font, 1, (0, 255, 0), 1, cv2.LINE_AA)	
-
-
-            ####################--------- desenha o cubo -----------#########################
-            # https://github.com/RaviJoshii/3DModeler/blob/eb7ca48fa06ca85fcf5c5ec9dc4b562ce9a22a76/opencv/program/detect.py			
-            m = marker_size/2
-            pts = np.float32([[-m,m,m], [-m,-m,m], [m,-m,m], [m,m,m],[-m,m,0], [-m,-m,0], [m,-m,0], [m,m,0]])
-            imgpts, _ = cv2.projectPoints(pts, rvec, tvec, camera_matrix, camera_distortion)
-            imgpts = np.int32(imgpts).reshape(-1,2)
-            cv_image = cv2.drawContours(cv_image, [imgpts[:4]],-1,(0,0,255),4)
-            for i,j in zip(range(4),range(4,8)): cv_image = cv2.line(cv_image, tuple(imgpts[i]), tuple(imgpts[j]),(0,0,255),4);
-            cv_image = cv2.drawContours(cv_image, [imgpts[4:]],-1,(0,0,255),4)
-
-            
-		
+        #centro, saida_net, resultados =  visao_module.processa(temp_image)    
+        # for r in resultados:
+            # print(r) - print feito para documentar e entender
+            # o resultado            
+        #     pass
         
+
+
+        if frame%skip==0: # contamos a cada skip frames
+
+            mask = putils.filter_color(copia, low, high)          
+
+            if state == CORTAR_MASK:
+                mask = mask[:,0:290] #mascara para pegar somente a bifur da esquerda 
+                str_CORTAR_MASK = f'CHEGOU NA BIFURCACA0'
+                cv2.putText(cv_image,str_CORTAR_MASK, (350, 90), font, 1, (150, 0, 200), 1, cv2.LINE_AA)
+
+            else: 
+                pass
+
+            img, centro_yellow  =  putils.center_of_mass_region(mask, 0, 300, mask.shape[1], mask.shape[0])  
+
+            saida_bgr, m, h = putils.ajuste_linear_grafico_x_fy(mask)
+
+            ang = math.atan(m)
+            ang_deg = math.degrees(ang)
+
+            angle_yellow = ang_deg
+
+            putils.texto(saida_bgr, f"Angulo graus: {ang_deg}", (15,50), color=(0,255,255))
+            putils.texto(saida_bgr, f"Angulo rad: {ang}", (15,90), color=(0,255,255))
+            
+            cv2.imshow("centro", img)
+            cv2.imshow("angulo", saida_bgr)
+
+            putils.aruco_reader(cv_image,ids,corners,marker_size,camera_matrix,camera_distortion,font)
+            str_ids = f"ID: {ids}"
+            cv2.putText(cv_image, str_ids, (0, 50), font, 1, (255,255,255), 1, cv2.LINE_AA)
+
+            str_odom = "x = %5.4f      y = %5.4f"%(x_odom, y_odom)
+            
+            cv2.putText(cv_image, str_odom, (340, 150), font, 1, (255,255,255), 1, cv2.LINE_AA)
+
+            str_distancia = f'DISTANCIA: {distancia}'
+
+            cv2.putText(cv_image, str_distancia, (350, 50), font, 1, (255,255,255), 1, cv2.LINE_AA)
+
+            str_estado = f'ESTADO: {state}'
+
+            cv2.putText(cv_image,str_estado, (350, 70), font, 1, (255,255,255), 1, cv2.LINE_AA)
+
+            str_bifurcacao = "x_bifur = %5.2f y_bifur = %5.2f"%(x_bifurcacao, y_bifurcacao)
+
+            cv2.putText(cv_image,str_bifurcacao, (340, 110), font, 1, (255,255,255), 1, cv2.LINE_AA)
+
+            str_rotatoria = "x_rot = %5.2f y_rot = %5.2f"%(x_rotatoria, y_rotatoria)
+
+            cv2.putText(cv_image,str_rotatoria, (340, 130), font, 1, (255,255,255), 1, cv2.LINE_AA)
+
+            if identificaCreeper:
+                media_cor, centro_frame, area_frame = putils.identifica_cor(cv_image,goal)
+
+                str_goal = f'GOAL: {goal}'
+                cv2.putText(cv_image,str_goal, (0, 20), font, 1, (0,0,0), 2, cv2.LINE_AA)
+
+                area_cor = area_frame
+                centro_cor = media_cor
+                
+            else:
+                str_goal = f'GOAl: SEGUIR A PISTA'
+                cv2.putText(cv_image,str_goal, (0, 20), font, 1, (0,0,0), 2, cv2.LINE_AA)
+
         cv2.imshow("cv_image", cv_image)
         cv2.waitKey(1)
-
+        
     except CvBridgeError as e:
         print('ex', e)
-    
+
 
 if __name__=="__main__":
+
     rospy.init_node("cor")
 
-
     topico_imagem = "/camera/image/compressed"
+    velocidade_saida = rospy.Publisher("/cmd_vel", Twist, queue_size = 3 )
+    cmd_vel = velocidade_saida
+
+    recebe_scan = rospy.Subscriber("/scan", LaserScan, scaneou)
+    pose_sub = rospy.Subscriber('/odom', Odometry , mypose)
+    recebe_scan = rospy.Subscriber('/odom', Odometry , recebeu_leitura)
     recebedor = rospy.Subscriber(topico_imagem, CompressedImage, roda_todo_frame, queue_size=4, buff_size = 2**24)
-    recebe_scan = rospy.Subscriber(topico_odom, Odometry , recebeu_leitura)
-    #recebe_scan = rospy.Subscriber("/scan", LaserScan, scaneou)
+
+    zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
+
+    x = 0
+    
+    tol_centro = 10 # tolerancia de fuga do centro
+    tol_ang = 15 # tolerancia do angulo
 
 
-    #print("Usando ", topico_imagem)
+    c_img = (320,240) # Centro da imagem  que ao todo é 640 x 480
 
-    velocidade_saida = rospy.Publisher("/cmd_vel", Twist, queue_size = 1)
+    v_slow = 0.5
+    v_rapido = 1
 
-    tfl = tf2_ros.TransformListener(tf_buffer) #conversao do sistema de coordenadas 
-    tolerancia = 25
-   
-    centro  = 320
-    margem = 5
+    w_slow = 0.2
+    w_rapido = 0.75
+
+    
+    INICIAL= -1
+    AVANCA = 0
+    AVANCA_RAPIDO = 1
+    ALINHA = 2
+    TERMINOU = 3
+    PARAR = 4
+    VIRAR_ESQUERDA = 5
+    VIRAR_DIREITA = 6
+    CORTAR_MASK = 7
+    VOLTAR = 8
+    FAZENDO_ROTATORIA = 9
+    ALINHA_COR = 10
+
+
+    segunda_volta = False
+    
+    state = INICIAL
+
+    area_ideal = 1100
+
+    margem = 0.45
+
+
+    def inicial():
+        pass
+
+    def avanca():
+        vel = Twist(Vector3(v_slow,0,0), Vector3(0,0,0)) 
+        cmd_vel.publish(vel) 
+
+    def avanca_rapido():
+        vel = Twist(Vector3(v_slow,0,0), Vector3(0,0,0))         
+        cmd_vel.publish(vel)
+
+    def alinha():
+        delta_x = c_img[x] - centro_yellow[x]
+        max_delta = 150.0
+        w = (delta_x/max_delta)*w_rapido
+        vel = Twist(Vector3(v_slow,0,0), Vector3(0,0,w)) 
+        cmd_vel.publish(vel)       
+
+    def terminou():
+        zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
+        cmd_vel.publish(zero)
+
+    def parar():
+        zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
+        cmd_vel.publish(zero)
+        rospy.sleep(2)
+        
+    def cortar_mask():
+        pass
+        
+    def virar_esquerda():
+        zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
+        cmd_vel.publish(zero)
+        rospy.sleep(0.5)
+        w = 0.6
+        giro = math.radians(65)
+        delta_t = giro/w
+        vel = Twist(Vector3(0,0,0), Vector3(0,0,w))
+        cmd_vel.publish(vel)
+        rospy.sleep(delta_t)
+       
+       
+    def virar_direita():
+        w = 20
+        giro = math.radians(45)
+        delta_t = giro/w
+        vel = Twist(Vector3(0,0,0), Vector3(0,0,-w))
+        cmd_vel.publish(vel)
+        rospy.sleep(delta_t)
+
+    def voltar():
+        w = 2
+        giro = math.radians(145)
+        delta_t = giro/w
+        vel = Twist(Vector3(0,0,0), Vector3(0,0,w))
+        cmd_vel.publish(vel)
+        rospy.sleep(delta_t)
+
+    def fazendo_rotatoria():
+        pass
+
+
+    def alinha_cor():
+        delta_x = c_img[x] - centro_cor[x]
+        max_delta = 150.0
+        w = (delta_x/max_delta)*w_rapido
+        vel = Twist(Vector3(v_slow,0,0), Vector3(0,0,w)) 
+        cmd_vel.publish(vel)    
+
+
+    def dispatch():
+        "Logica de determinar o proximo estado"
+        global state
+        global ids
+        global distance
+        global x_odom
+        global y_odom
+        global distancia
+        global x_bifurcacao
+        global y_bifurcacao
+        global x_rotatoria
+        global y_rotatoria
+        global segunda_volta
+        global angle_yellow
+        global cv_image
+        global area_cor
+        global centro_cor
+        global area_ideal 
+        global bater      
+        global identificaCreeper
+        global margem
+        
+           
+        if state == VIRAR_ESQUERDA:
+            rospy.sleep(1.5)
+            segunda_volta = False
+        
+        if state == PARAR:
+            w = 5
+            giro = math.radians(130)
+            delta_t = giro/w
+            vel = Twist(Vector3(0,0,0), Vector3(0,0,w))
+            cmd_vel.publish(vel)
+            rospy.sleep(delta_t)
+            
+
+        if state == FAZENDO_ROTATORIA:
+            str_fazendo_rot = "FAZENDO ROTATORIA"
+            print(str_fazendo_rot)
+            cv2.putText(cv_image,str_fazendo_rot, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
+
+            if angle_yellow > 15:
+                if x_odom < x_rotatoria + 0.4:
+                    if y_odom < y_rotatoria - 0.4:
+                        state = CORTAR_MASK
+                        str_sair_rot = 'SAIR DA ROTATORIA'
+                        cv2.putText(cv_image,str_sair_rot, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
+                    
+                      
+        if state == TERMINOU:
+            state = VOLTAR
+
+                            
+        if c_img[x] - tol_centro < centro_yellow[x] < c_img[x] + tol_centro:
+            state = AVANCA
+            if   - tol_ang< angle_yellow  < tol_ang:  # para angulos centrados na vertical, regressao de x = f(y) como está feito
+                state = AVANCA_RAPIDO
+
+            if ids is not None:
+                for i in ids:
+    
+                    if distancia < 1.33 and i[0] == 100 :
+                        state = CORTAR_MASK # corta mascara e bifurca para esquerda
+                        x_bifurcacao = x_odom
+                        y_bifurcacao = y_odom 
+                        
+                    if i[0] == 150 and distancia < 0.7:
+                        state = TERMINOU #chega no final na bifurcacao da esquerda e volta para pista
+                        state = VOLTAR
+                        segunda_volta = True                       
+
+                    if i[0] == 50 and distancia < 0.7:
+                        state = TERMINOU #chega no final na bifurcacao da direita e volta para pista
+                        state = VOLTAR
+                        segunda_volta = False 
+
+                    if i[0] == 200:
+                        if 1 > distancia > 0.75: #entra na rotatoria pela esquerda
+                            x_rotatoria = x_odom
+                            y_rotatoria = y_odom
+                            state = FAZENDO_ROTATORIA
+ 
+        else: 
+                state = ALINHA        
+
+        if segunda_volta:
+            if x_odom < x_bifurcacao and y_odom < y_bifurcacao:
+                if x_odom > x_bifurcacao - margem:
+                    str_fazendo_bifur = "VAI BIFURCA NOVAMENTE"
+                    print(str_fazendo_bifur)
+                    cv2.putText(cv_image,str_fazendo_bifur, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
+                    state = VIRAR_ESQUERDA
+                    
+
+        if identificaCreeper:
+        
+            if area_cor >= area_ideal and bater:
+
+                if c_img[x] - tol_centro < centro_cor[x] < c_img[x] + tol_centro:
+                    state = AVANCA
+                    if area_cor > 14550: 
+                        str_creeper = 'VAI BATER NO CREEPER'
+                        print(str_creeper)
+                        cv2.putText(cv_image,str_creeper, (0, 100), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
+                        state = TERMINOU 
+                        state = VOLTAR
+                        bater = False
+                        return  
+                else: 
+                    state = ALINHA_COR
+
+        # print("centro_cor {}  area_cor {}  state: {} ".format(centro_cor, area_cor, state))
+
+    acoes = {INICIAL:inicial, AVANCA: avanca, AVANCA_RAPIDO: avanca_rapido, 
+    ALINHA: alinha, TERMINOU: terminou, PARAR: parar, VIRAR_ESQUERDA: virar_esquerda, VIRAR_DIREITA: virar_direita,
+    CORTAR_MASK: cortar_mask ,VOLTAR: voltar, FAZENDO_ROTATORIA:fazendo_rotatoria, ALINHA_COR: alinha_cor}
+
+    r = rospy.Rate(200) 
 
     try:
-               
-        
+
         while not rospy.is_shutdown():
-            print("x {} y {} z {}".format(x, y, z))
-            velocidade_saida.publish(vel)
-            rospy.sleep(0.1)
-
-            #for r in resultados:
-                #print(r)
-
+            print("Estado: ", state)       
+            acoes[state]()  # executa a funcão que está no dicionário
+            # identificaCreeper = True
+            dispatch()   
+            r.sleep()
 
     except rospy.ROSInterruptException:
         print("Ocorreu uma exceção com o rospy")
-        #codigo para dar restart na posicao original do robo --> depois que apertar ctrl+c
-        
-        """pyautogui.click(800,800) #clica em um ponto x a tela para pegar a window do gazebo
-        time.sleep(1) #espera um segundo
-        pyautogui.hotkey('ctrl', 'r')#aperta ctrl + r """
-
-
