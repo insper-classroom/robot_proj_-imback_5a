@@ -241,14 +241,14 @@ def roda_todo_frame(imagem):
             if identificaCreeper:
                 media_cor, centro_frame, area_frame = putils.identifica_cor(cv_image,goal)
 
-                str_goal = f'GOAL: {goal}'
+                str_goal = f'GOAL: achar o creeper {goal}'
                 cv2.putText(cv_image,str_goal, (0, 20), font, 1, (0,0,0), 2, cv2.LINE_AA)
 
                 area_cor = area_frame
                 centro_cor = media_cor
                 
             else:
-                str_goal = f'GOAl: SEGUIR A PISTA'
+                str_goal = f'GOAL: seguir a pista'
                 cv2.putText(cv_image,str_goal, (0, 20), font, 1, (0,0,0), 2, cv2.LINE_AA)
 
         cv2.imshow("cv_image", cv_image)
@@ -402,6 +402,7 @@ if __name__=="__main__":
         global bater      
         global identificaCreeper
         global margem
+        global goal
         
            
         if state == VIRAR_ESQUERDA:
@@ -481,14 +482,36 @@ if __name__=="__main__":
 
                 if c_img[x] - tol_centro < centro_cor[x] < c_img[x] + tol_centro:
                     state = AVANCA
-                    if area_cor > 14550: 
-                        str_creeper = 'VAI BATER NO CREEPER'
-                        print(str_creeper)
-                        cv2.putText(cv_image,str_creeper, (0, 100), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
-                        state = TERMINOU 
-                        state = VOLTAR
-                        bater = False
-                        return  
+
+                    if goal == 'azul':
+                        if area_cor > 14000: 
+                            str_creeper = 'VAI BATER NO CREEPER'
+                            print(str_creeper)
+                            cv2.putText(cv_image,str_creeper, (0, 100), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
+                            state = TERMINOU 
+                            state = VOLTAR
+                            bater = False
+                            return
+
+                    elif goal == 'verde':
+                        if area_cor > 23500: 
+                            str_creeper = 'VAI BATER NO CREEPER'
+                            print(str_creeper)
+                            cv2.putText(cv_image,str_creeper, (0, 100), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
+                            state = TERMINOU 
+                            state = VOLTAR
+                            bater = False
+                            return
+
+                    else:
+                        if area_cor > 12250: 
+                            str_creeper = 'VAI BATER NO CREEPER'
+                            print(str_creeper)
+                            cv2.putText(cv_image,str_creeper, (0, 100), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
+                            state = TERMINOU 
+                            state = VOLTAR
+                            bater = False
+                            return
                 else: 
                     state = ALINHA_COR
 
@@ -505,7 +528,7 @@ if __name__=="__main__":
         while not rospy.is_shutdown():
             print("Estado: ", state)       
             acoes[state]()  # executa a funcão que está no dicionário
-            # identificaCreeper = True
+            identificaCreeper = True
             dispatch()   
             r.sleep()
 
