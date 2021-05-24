@@ -18,6 +18,7 @@ from sensor_msgs.msg import Image, CompressedImage
 from cv_bridge import CvBridge, CvBridgeError
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist, Vector3, Pose, Vector3Stamped
+from std_msgs.msg import Float64
 import cv2.aruco as aruco
 from scipy.spatial.transform import Rotation as R
 import visao_module
@@ -26,6 +27,7 @@ import projeto_utils as putils
 
 # Para rodar a simulacao faca : roslaunch my_simulation forca.launch
 # Para rodar o progama: rosrun ros_projeto projeto.py
+# Para rodar a garra: roslaunch mybot_description mybot_control2.launch
 
 # ------------------------------------- DEFININDO AS VARIAVEIS ----------------------------------------------------------------------------------------------------------------
 id = 0
@@ -81,8 +83,6 @@ y_bifurcacao = 1000
 x_rotatoria = 1000
 y_rotatoria = 1000
 
-acha_cor = None
-
 centro_cor = (320, 240)
 area_cor = 0
 
@@ -90,7 +90,14 @@ bater = True
 
 identificaCreeper  = False
 
-goal = 'azul'
+
+goal = ('azul', 12)
+
+cor_desejada = goal[0]
+id_desejado = goal[1]
+
+ConceitoC = False
+ConceitoB = False
 
 # -------------------------------------- FUNCOES DE POSICOES E SENSORES ----------------------------------------------------------------------------------------------------------------------------
 
@@ -168,6 +175,9 @@ def roda_todo_frame(imagem):
     global area_cor
     global goal
     global identificaCreeper
+    global cor_desejada
+    global id_desejado
+    global ConceitoB
        
 
     try:
@@ -239,14 +249,18 @@ def roda_todo_frame(imagem):
             cv2.putText(cv_image,str_rotatoria, (340, 130), font, 1, (255,255,255), 1, cv2.LINE_AA)
 
             if identificaCreeper:
-                media_cor, centro_frame, area_frame = putils.identifica_cor(cv_image,goal)
-
-                str_goal = f'GOAL: achar o creeper {goal}'
-                cv2.putText(cv_image,str_goal, (0, 20), font, 1, (0,0,0), 2, cv2.LINE_AA)
+                media_cor, centro_frame, area_frame = putils.identifica_cor(cv_image,cor_desejada)
 
                 area_cor = area_frame
                 centro_cor = media_cor
-                
+
+                if ConceitoB:
+                    str_goal = f'GOAL: achar o creeper {cor_desejada} de id {id_desejado}'
+                    cv2.putText(cv_image,str_goal, (0, 20), font, 1, (0,0,0), 2, cv2.LINE_AA)
+                else:
+                    str_goal = f'GOAL: achar o creeper {cor_desejada}'
+                    cv2.putText(cv_image,str_goal, (0, 20), font, 1, (0,0,0), 2, cv2.LINE_AA)
+
             else:
                 str_goal = f'GOAL: seguir a pista'
                 cv2.putText(cv_image,str_goal, (0, 20), font, 1, (0,0,0), 2, cv2.LINE_AA)
@@ -270,6 +284,8 @@ if __name__=="__main__":
     pose_sub = rospy.Subscriber('/odom', Odometry , mypose)
     recebe_scan = rospy.Subscriber('/odom', Odometry , recebeu_leitura)
     recebedor = rospy.Subscriber(topico_imagem, CompressedImage, roda_todo_frame, queue_size=4, buff_size = 2**24)
+    ombro = rospy.Publisher("/joint1_position_controller/command", Float64, queue_size=1)
+    garra = rospy.Publisher("/joint2_position_controller/command", Float64, queue_size=1)
 
     zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
 
@@ -281,11 +297,11 @@ if __name__=="__main__":
 
     c_img = (320,240) # Centro da imagem  que ao todo é 640 x 480
 
-    v_slow = 0.5
-    v_rapido = 1
+    v_slow = 0.2
+    v_rapido = 0.3
 
-    w_slow = 0.2
-    w_rapido = 0.75
+    w_slow = 0.17
+    w_rapido = 0.3
 
     
     INICIAL= -1
@@ -300,9 +316,13 @@ if __name__=="__main__":
     VOLTAR = 8
     FAZENDO_ROTATORIA = 9
     ALINHA_COR = 10
+    SAIR_ROTATORIA = 11
+    PEGA_CREEPER = 12
 
 
     segunda_volta = False
+
+    rotatoria = False
     
     state = INICIAL
 
@@ -346,7 +366,7 @@ if __name__=="__main__":
         cmd_vel.publish(zero)
         rospy.sleep(0.5)
         w = 0.6
-        giro = math.radians(65)
+        giro = math.radians(60)
         delta_t = giro/w
         vel = Twist(Vector3(0,0,0), Vector3(0,0,w))
         cmd_vel.publish(vel)
@@ -380,6 +400,30 @@ if __name__=="__main__":
         vel = Twist(Vector3(v_slow,0,0), Vector3(0,0,w)) 
         cmd_vel.publish(vel)    
 
+    def sair_rotatoria():
+        zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
+        cmd_vel.publish(zero)
+        rospy.sleep(0.5)
+        w = 2
+        giro = math.radians(5)
+        delta_t = giro/w
+        vel = Twist(Vector3(0,0,0), Vector3(0,0,w))
+        cmd_vel.publish(vel)
+        rospy.sleep(delta_t)
+
+    def pega_creeper():
+        # ombro.publish(-1.0) ## para baixo
+        # rospy.sleep(0.3)
+        # garra.publish(-1.0) ## Aberto
+        # rospy.sleep(0.3)
+        # ombro.publish(0.0) ## para frente
+        # rospy.sleep(0.3)
+        # garra.publish(0.0)  ## Fechado
+        # rospy.sleep(0.3)
+        # ombro.publish(1.5) ## para cima
+        # rospy.sleep(0.5)
+        pass
+
 
     def dispatch():
         "Logica de determinar o proximo estado"
@@ -393,6 +437,7 @@ if __name__=="__main__":
         global y_bifurcacao
         global x_rotatoria
         global y_rotatoria
+        global rotatoria
         global segunda_volta
         global angle_yellow
         global cv_image
@@ -403,11 +448,21 @@ if __name__=="__main__":
         global identificaCreeper
         global margem
         global goal
+        global id_desejado
+        global cor_desejada
+        global ConceitoB
+        global ConceitoC
+
+        if state == PEGA_CREEPER:
+            pass
         
            
         if state == VIRAR_ESQUERDA:
             rospy.sleep(1.5)
             segunda_volta = False
+
+        if state == SAIR_ROTATORIA:
+            rotatoria = False
         
         if state == PARAR:
             w = 5
@@ -417,23 +472,8 @@ if __name__=="__main__":
             cmd_vel.publish(vel)
             rospy.sleep(delta_t)
             
-
-        if state == FAZENDO_ROTATORIA:
-            str_fazendo_rot = "FAZENDO ROTATORIA"
-            print(str_fazendo_rot)
-            cv2.putText(cv_image,str_fazendo_rot, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
-
-            if angle_yellow > 15:
-                if x_odom < x_rotatoria + 0.4:
-                    if y_odom < y_rotatoria - 0.4:
-                        state = CORTAR_MASK
-                        str_sair_rot = 'SAIR DA ROTATORIA'
-                        cv2.putText(cv_image,str_sair_rot, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
-                    
-                      
         if state == TERMINOU:
             state = VOLTAR
-
                             
         if c_img[x] - tol_centro < centro_yellow[x] < c_img[x] + tol_centro:
             state = AVANCA
@@ -459,10 +499,10 @@ if __name__=="__main__":
                         segunda_volta = False 
 
                     if i[0] == 200:
-                        if 1 > distancia > 0.75: #entra na rotatoria pela esquerda
+                        if 1.3 > distancia > 0.75: #entra na rotatoria pela esquerda
                             x_rotatoria = x_odom
                             y_rotatoria = y_odom
-                            state = FAZENDO_ROTATORIA
+                            rotatoria = True
  
         else: 
                 state = ALINHA        
@@ -470,10 +510,22 @@ if __name__=="__main__":
         if segunda_volta:
             if x_odom < x_bifurcacao and y_odom < y_bifurcacao:
                 if x_odom > x_bifurcacao - margem:
-                    str_fazendo_bifur = "VAI BIFURCA NOVAMENTE"
+                    str_fazendo_bifur = "VAI BIFURCAR NOVAMENTE"
                     print(str_fazendo_bifur)
                     cv2.putText(cv_image,str_fazendo_bifur, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
                     state = VIRAR_ESQUERDA
+
+        if rotatoria:
+            str_fazendo_rot = "FAZENDO ROTATORIA"
+            print(str_fazendo_rot)
+            cv2.putText(cv_image,str_fazendo_rot, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
+
+            if angle_yellow > 20:
+                if x_odom < x_rotatoria + 0.7 and y_odom < y_rotatoria - 0.5:
+                    state = SAIR_ROTATORIA
+                    str_sair_rot = 'SAIR DA ROTATORIA'
+                    print(str_sair_rot)
+                    cv2.putText(cv_image,str_sair_rot, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
                     
 
         if identificaCreeper:
@@ -483,9 +535,9 @@ if __name__=="__main__":
                 if c_img[x] - tol_centro < centro_cor[x] < c_img[x] + tol_centro:
                     state = AVANCA
 
-                    if goal == 'azul':
-                        if area_cor > 14000: 
-                            str_creeper = 'VAI BATER NO CREEPER'
+                    if ConceitoC:
+                        if area_cor > 12500: 
+                            str_creeper = 'ENCONTROU O CREEPER'
                             print(str_creeper)
                             cv2.putText(cv_image,str_creeper, (0, 100), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
                             state = TERMINOU 
@@ -493,25 +545,45 @@ if __name__=="__main__":
                             bater = False
                             return
 
-                    elif goal == 'verde':
-                        if area_cor > 23500: 
-                            str_creeper = 'VAI BATER NO CREEPER'
+                    if ConceitoB:
+
+                        if area_cor > 10000: 
+
+                            str_creeper = 'VAI PEGAR O CREEPER'
                             print(str_creeper)
                             cv2.putText(cv_image,str_creeper, (0, 100), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
+
+                            zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
+                            cmd_vel.publish(zero)
+                            rospy.sleep(1)
+
+                            ombro.publish(-0.35) ## para frente
+                            rospy.sleep(2)
+
+                            garra.publish(-1.0) ## Aberto
+                            rospy.sleep(0.5)
+
+                            vel = Twist(Vector3(0.1,0,0), Vector3(0,0,0)) 
+                            cmd_vel.publish(vel) 
+                            rospy.sleep(2)
+
+                            cmd_vel.publish(zero)
+                            rospy.sleep(1)
+
+                            garra.publish(0.0)  ## Fechado
+                            rospy.sleep(3.5)
+
+                            ombro.publish(0.3) ## para cima
+                            rospy.sleep(2)
+
                             state = TERMINOU 
                             state = VOLTAR
                             bater = False
                             return
 
-                    else:
-                        if area_cor > 12250: 
-                            str_creeper = 'VAI BATER NO CREEPER'
-                            print(str_creeper)
-                            cv2.putText(cv_image,str_creeper, (0, 100), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
-                            state = TERMINOU 
-                            state = VOLTAR
-                            bater = False
-                            return
+                    
+                
+
                 else: 
                     state = ALINHA_COR
 
@@ -519,7 +591,7 @@ if __name__=="__main__":
 
     acoes = {INICIAL:inicial, AVANCA: avanca, AVANCA_RAPIDO: avanca_rapido, 
     ALINHA: alinha, TERMINOU: terminou, PARAR: parar, VIRAR_ESQUERDA: virar_esquerda, VIRAR_DIREITA: virar_direita,
-    CORTAR_MASK: cortar_mask ,VOLTAR: voltar, FAZENDO_ROTATORIA:fazendo_rotatoria, ALINHA_COR: alinha_cor}
+    CORTAR_MASK: cortar_mask ,VOLTAR: voltar, FAZENDO_ROTATORIA:fazendo_rotatoria, ALINHA_COR: alinha_cor, SAIR_ROTATORIA: sair_rotatoria, PEGA_CREEPER: pega_creeper}
 
     r = rospy.Rate(200) 
 
@@ -529,6 +601,8 @@ if __name__=="__main__":
             print("Estado: ", state)       
             acoes[state]()  # executa a funcão que está no dicionário
             identificaCreeper = True
+            # ConceitoC = True
+            ConceitoB = True
             dispatch()   
             r.sleep()
 
