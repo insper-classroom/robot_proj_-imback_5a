@@ -90,14 +90,32 @@ bater = True
 
 identificaCreeper  = False
 
+#---------------------------------------- OBJETIVOS --------------------------------------------------------------------------------------------------------------------------------------------
 
-goal = ('azul', 12)
+# goal1 = ("blue", 12, "dog")
+# goal2 = ("green", 23, "horse")
+# goal3 = ("orange", 11, "cow")
+
+goal = ('orange', 23)
 
 cor_desejada = goal[0]
 id_desejado = goal[1]
 
+# ----------------------------------------- CONCEITOS FEITOS ------------------------------------------------------------------------------------------------------------------------------------------
+
 ConceitoC = False
+
+# 1) na linha , ConceitoC = True
+# 2) Se for testar seguir a pista faca: identificaCreeper = False; linha
+# 3) Se for testar a identificacao do creeper, escolha a cor, e passe-a em goal
+
+
 ConceitoB = False
+
+# 1) ConceitoC = False na linha  
+# 2) ConceitoB = True na linha 
+# 3) Modifique o goal (linha ) para cor e id que se deseja testar
+
 
 # -------------------------------------- FUNCOES DE POSICOES E SENSORES ----------------------------------------------------------------------------------------------------------------------------
 
@@ -205,6 +223,7 @@ def roda_todo_frame(imagem):
                 mask = mask[:,0:290] #mascara para pegar somente a bifur da esquerda 
                 str_CORTAR_MASK = f'CHEGOU NA BIFURCACA0'
                 cv2.putText(cv_image,str_CORTAR_MASK, (350, 90), font, 1, (150, 0, 200), 1, cv2.LINE_AA)
+                
 
             else: 
                 pass
@@ -297,11 +316,17 @@ if __name__=="__main__":
 
     c_img = (320,240) # Centro da imagem  que ao todo é 640 x 480
 
-    v_slow = 0.2
-    v_rapido = 0.3
+    v_slow = 0.4
+    v_rapido = 1
 
-    w_slow = 0.17
-    w_rapido = 0.3
+    w_slow = 0.34
+    w_rapido = 0.85
+
+    # v_slow = 0.1
+    # v_rapido = 0.3
+
+    # w_slow = 0.34
+    # w_rapido = 0.85
 
     
     INICIAL= -1
@@ -354,9 +379,10 @@ if __name__=="__main__":
         cmd_vel.publish(zero)
 
     def parar():
-        zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
-        cmd_vel.publish(zero)
-        rospy.sleep(2)
+        # zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
+        # cmd_vel.publish(zero)
+        # rospy.sleep(2)
+        pass
         
     def cortar_mask():
         pass
@@ -465,10 +491,13 @@ if __name__=="__main__":
             rotatoria = False
         
         if state == PARAR:
+            str_fazendo_bifur = "VAI BIFURCAR"
+            print(str_fazendo_bifur)
+            cv2.putText(cv_image,str_fazendo_bifur, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
             w = 5
-            giro = math.radians(130)
+            giro = math.radians(10)
             delta_t = giro/w
-            vel = Twist(Vector3(0,0,0), Vector3(0,0,w))
+            vel = Twist(Vector3(0.3,0,0), Vector3(0,0,w))
             cmd_vel.publish(vel)
             rospy.sleep(delta_t)
             
@@ -485,6 +514,7 @@ if __name__=="__main__":
     
                     if distancia < 1.33 and i[0] == 100 :
                         state = CORTAR_MASK # corta mascara e bifurca para esquerda
+                        state = PARAR
                         x_bifurcacao = x_odom
                         y_bifurcacao = y_odom 
                         
@@ -532,60 +562,117 @@ if __name__=="__main__":
         
             if area_cor >= area_ideal and bater:
 
-                if c_img[x] - tol_centro < centro_cor[x] < c_img[x] + tol_centro:
-                    state = AVANCA
+                if ConceitoC:
 
-                    if ConceitoC:
+                    if c_img[x] - tol_centro < centro_cor[x] < c_img[x] + tol_centro:
+                        state = AVANCA
+
                         if area_cor > 12500: 
                             str_creeper = 'ENCONTROU O CREEPER'
                             print(str_creeper)
-                            cv2.putText(cv_image,str_creeper, (0, 100), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
+                            cv2.putText(cv_image,str_creeper, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
                             state = TERMINOU 
                             state = VOLTAR
                             bater = False
                             return
+                    else: 
+                        state = ALINHA_COR
+                
 
-                    if ConceitoB:
+                if ConceitoB:
 
-                        if area_cor > 10000: 
+                    if ids is not None:
+                        for i in ids:
+                            if i[0] == id_desejado:
 
-                            str_creeper = 'VAI PEGAR O CREEPER'
-                            print(str_creeper)
-                            cv2.putText(cv_image,str_creeper, (0, 100), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
+                                str_creeper = 'ENCONTROU O CREEPER'
+                                print(str_creeper)
+                                cv2.putText(cv_image,str_creeper, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
 
-                            zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
-                            cmd_vel.publish(zero)
-                            rospy.sleep(1)
+                                if c_img[x] - tol_centro < centro_cor[x] < c_img[x] + tol_centro:
+                                    state = AVANCA
 
-                            ombro.publish(-0.35) ## para frente
-                            rospy.sleep(2)
+                                    if cor_desejada == 'blue':
 
-                            garra.publish(-1.0) ## Aberto
-                            rospy.sleep(0.5)
+                                        if area_cor > 9250: 
 
-                            vel = Twist(Vector3(0.1,0,0), Vector3(0,0,0)) 
-                            cmd_vel.publish(vel) 
-                            rospy.sleep(2)
+                                            str_creeper = 'VAI PEGAR O CREEPER'
+                                            print(str_creeper)
+                                            cv2.putText(cv_image,str_creeper, (350, 150), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
 
-                            cmd_vel.publish(zero)
-                            rospy.sleep(1)
+                                            zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
+                                            cmd_vel.publish(zero)
+                                            rospy.sleep(1)
 
-                            garra.publish(0.0)  ## Fechado
-                            rospy.sleep(3.5)
+                                            ombro.publish(-0.35) ## para frente
+                                            rospy.sleep(2)
 
-                            ombro.publish(0.3) ## para cima
-                            rospy.sleep(2)
+                                            garra.publish(-1.0) ## Aberto
+                                            rospy.sleep(0.5)
 
-                            state = TERMINOU 
-                            state = VOLTAR
-                            bater = False
-                            return
+                                            vel = Twist(Vector3(0.1,0,0), Vector3(0,0,0)) 
+                                            cmd_vel.publish(vel) 
+                                            rospy.sleep(2.85)
+
+                                            cmd_vel.publish(zero)
+                                            rospy.sleep(1)
+
+                                            garra.publish(0.0)  ## Fechado
+                                            rospy.sleep(3.5)
+
+                                            ombro.publish(0.15) ## para cima
+                                            rospy.sleep(0.3)
+
+                                            state = TERMINOU 
+                                            state = VOLTAR
+                                            bater = False
+                                            return
+                                
+
+                                    if cor_desejada == 'green':
+
+                                        if area_cor > 11000: 
+
+                                            str_creeper = 'VAI PEGAR O CREEPER'
+                                            print(str_creeper)
+                                            cv2.putText(cv_image,str_creeper, (350, 150), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
+
+                                            zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
+                                            cmd_vel.publish(zero)
+                                            rospy.sleep(1)
+
+                                            ombro.publish(-0.35) ## para frente
+                                            rospy.sleep(2)
+
+                                            garra.publish(-1.0) ## Aberto
+                                            rospy.sleep(0.5)
+
+                                            vel = Twist(Vector3(0.1,0,0), Vector3(0,0,0)) 
+                                            cmd_vel.publish(vel) 
+                                            rospy.sleep(3.56)
+
+                                            cmd_vel.publish(zero)
+                                            rospy.sleep(1)
+
+                                            garra.publish(0.0)  ## Fechado
+                                            rospy.sleep(3.5)
+
+                                            ombro.publish(0.05) ## para cima
+                                            rospy.sleep(0.3)
+
+                                            state = TERMINOU 
+                                            state = VOLTAR
+                                            bater = False
+                                            return
+
+                                else: 
+                                    state = ALINHA_COR
 
                     
                 
 
-                else: 
-                    state = ALINHA_COR
+                # else: 
+                #     state = ALINHA_COR
 
         # print("centro_cor {}  area_cor {}  state: {} ".format(centro_cor, area_cor, state))
 
@@ -601,8 +688,8 @@ if __name__=="__main__":
             print("Estado: ", state)       
             acoes[state]()  # executa a funcão que está no dicionário
             identificaCreeper = True
-            # ConceitoC = True
-            ConceitoB = True
+            ConceitoC = True
+            # ConceitoB = True
             dispatch()   
             r.sleep()
 

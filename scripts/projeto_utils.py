@@ -168,15 +168,15 @@ def identifica_cor(frame, cor):
     # frame = cv2.flip(frame, -1) # flip 0: eixo x, 1: eixo y, -1: 2 eixos
     frame_hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
-    if cor == 'azul':
+    if cor == 'blue':
         cor_menor = np.array([78, 50, 50])
         cor_maior = np.array([120, 255, 255])
 
-    elif cor == 'verde':
+    elif cor == 'green':
         cor_menor = np.array([35, 50, 50])
         cor_maior = np.array([70, 255, 255])
 
-    elif cor == 'laranja':
+    elif cor == 'orange':
         cor_menor = np.array([0, 200, 100])
         cor_maior = np.array([10, 255, 255])
 
@@ -287,7 +287,5 @@ def aruco_reader(cv_image,ids,corners,marker_size,camera_matrix,camera_distortio
             # print(str_distfocal)
             # cv2.putText(cv_image, str_distfocal, (0, 30), font, 1, (255, 255, 255), 1, cv2.LINE_AA)	
 
-def crop_esquerda(mask):
-    mask = mask[:,0:320]
-    return mask
+
 
