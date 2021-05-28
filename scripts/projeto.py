@@ -92,11 +92,9 @@ identificaCreeper  = False
 
 #---------------------------------------- OBJETIVOS --------------------------------------------------------------------------------------------------------------------------------------------
 
-# goal1 = ("blue", 12, "dog")
-# goal2 = ("green", 23, "horse")
-# goal3 = ("orange", 11, "cow")
-
-goal = ('orange', 23)
+# goal = ("blue", 12, "dog")
+# goal = ("green", 23, "horse")
+goal = ("orange", 11, "cow")
 
 cor_desejada = goal[0]
 id_desejado = goal[1]
@@ -342,7 +340,6 @@ if __name__=="__main__":
     FAZENDO_ROTATORIA = 9
     ALINHA_COR = 10
     SAIR_ROTATORIA = 11
-    PEGA_CREEPER = 12
 
 
     segunda_volta = False
@@ -437,19 +434,6 @@ if __name__=="__main__":
         cmd_vel.publish(vel)
         rospy.sleep(delta_t)
 
-    def pega_creeper():
-        # ombro.publish(-1.0) ## para baixo
-        # rospy.sleep(0.3)
-        # garra.publish(-1.0) ## Aberto
-        # rospy.sleep(0.3)
-        # ombro.publish(0.0) ## para frente
-        # rospy.sleep(0.3)
-        # garra.publish(0.0)  ## Fechado
-        # rospy.sleep(0.3)
-        # ombro.publish(1.5) ## para cima
-        # rospy.sleep(0.5)
-        pass
-
 
     def dispatch():
         "Logica de determinar o proximo estado"
@@ -478,9 +462,10 @@ if __name__=="__main__":
         global cor_desejada
         global ConceitoB
         global ConceitoC
-
-        if state == PEGA_CREEPER:
-            pass
+        global v_rapido
+        global v_slow
+        global w_rapido
+        global w_slow
         
            
         if state == VIRAR_ESQUERDA:
@@ -532,6 +517,12 @@ if __name__=="__main__":
                         if 1.3 > distancia > 0.75: #entra na rotatoria pela esquerda
                             x_rotatoria = x_odom
                             y_rotatoria = y_odom
+
+                            if id_desejado == 11:
+                                state = VIRAR_DIREITA
+                            else:
+                                pass
+
                             rotatoria = True
  
         else: 
@@ -584,6 +575,12 @@ if __name__=="__main__":
                     if ids is not None:
                         for i in ids:
                             if i[0] == id_desejado:
+
+                                v_slow = 0.1
+                                v_rapido = 0.3
+
+                                w_slow = 0.34
+                                w_rapido = 0.85
 
                                 str_creeper = 'ENCONTROU O CREEPER'
                                 print(str_creeper)
@@ -649,7 +646,44 @@ if __name__=="__main__":
 
                                             vel = Twist(Vector3(0.1,0,0), Vector3(0,0,0)) 
                                             cmd_vel.publish(vel) 
-                                            rospy.sleep(3.56)
+                                            rospy.sleep(3.63)
+
+                                            cmd_vel.publish(zero)
+                                            rospy.sleep(1)
+
+                                            garra.publish(0.0)  ## Fechado
+                                            rospy.sleep(3.5)
+
+                                            ombro.publish(0.05) ## para cima
+                                            rospy.sleep(0.3)
+
+                                            state = TERMINOU 
+                                            state = VOLTAR
+                                            bater = False
+                                            return
+
+
+                                    if cor_desejada == 'orange':
+
+                                        if area_cor > 12000: 
+
+                                            str_creeper = 'VAI PEGAR O CREEPER'
+                                            print(str_creeper)
+                                            cv2.putText(cv_image,str_creeper, (350, 150), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
+
+                                            zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
+                                            cmd_vel.publish(zero)
+                                            rospy.sleep(1)
+
+                                            ombro.publish(-0.35) ## para frente
+                                            rospy.sleep(2)
+
+                                            garra.publish(-1.0) ## Aberto
+                                            rospy.sleep(0.5)
+
+                                            vel = Twist(Vector3(0.1,0,0), Vector3(0,0,0)) 
+                                            cmd_vel.publish(vel) 
+                                            rospy.sleep(2.42)
 
                                             cmd_vel.publish(zero)
                                             rospy.sleep(1)
@@ -678,7 +712,7 @@ if __name__=="__main__":
 
     acoes = {INICIAL:inicial, AVANCA: avanca, AVANCA_RAPIDO: avanca_rapido, 
     ALINHA: alinha, TERMINOU: terminou, PARAR: parar, VIRAR_ESQUERDA: virar_esquerda, VIRAR_DIREITA: virar_direita,
-    CORTAR_MASK: cortar_mask ,VOLTAR: voltar, FAZENDO_ROTATORIA:fazendo_rotatoria, ALINHA_COR: alinha_cor, SAIR_ROTATORIA: sair_rotatoria, PEGA_CREEPER: pega_creeper}
+    CORTAR_MASK: cortar_mask ,VOLTAR: voltar, FAZENDO_ROTATORIA:fazendo_rotatoria, ALINHA_COR: alinha_cor, SAIR_ROTATORIA: sair_rotatoria}
 
     r = rospy.Rate(200) 
 
@@ -688,8 +722,8 @@ if __name__=="__main__":
             print("Estado: ", state)       
             acoes[state]()  # executa a funcão que está no dicionário
             identificaCreeper = True
-            ConceitoC = True
-            # ConceitoB = True
+            # ConceitoC = True
+            ConceitoB = True
             dispatch()   
             r.sleep()
 
