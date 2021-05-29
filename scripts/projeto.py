@@ -215,19 +215,18 @@ def roda_todo_frame(imagem):
 
         if frame%skip==0: # contamos a cada skip frames
 
-            mask = putils.filter_color(copia, low, high)          
+            mask = putils.filter_color(copia, low, high) #filtra a cor amarela         
 
             if state == CORTAR_MASK:
                 mask = mask[:,0:290] #mascara para pegar somente a bifur da esquerda 
                 str_CORTAR_MASK = f'CHEGOU NA BIFURCACA0'
-                cv2.putText(cv_image,str_CORTAR_MASK, (350, 90), font, 1, (150, 0, 200), 1, cv2.LINE_AA)
+                cv2.putText(cv_image,str_CORTAR_MASK, (350, 90), font, 1, (150, 0, 200), 1, cv2.LINE_AA) #avisa na imagem que chegou na bifurcacao
                 
 
             else: 
                 pass
 
-            img, centro_yellow  =  putils.center_of_mass_region(mask, 0, 300, mask.shape[1], mask.shape[0])  
-
+            img, centro_yellow  =  putils.center_of_mass_region(mask, 0, 300, mask.shape[1], mask.shape[0]) 
             saida_bgr, m, h = putils.ajuste_linear_grafico_x_fy(mask)
 
             ang = math.atan(m)
@@ -243,44 +242,44 @@ def roda_todo_frame(imagem):
 
             putils.aruco_reader(cv_image,ids,corners,marker_size,camera_matrix,camera_distortion,font)
             str_ids = f"ID: {ids}"
-            cv2.putText(cv_image, str_ids, (0, 50), font, 1, (255,255,255), 1, cv2.LINE_AA)
+            cv2.putText(cv_image, str_ids, (0, 50), font, 1, (255,255,255), 1, cv2.LINE_AA) # devolve na imagem todos os IDs detectados
 
             str_odom = "x = %5.4f      y = %5.4f"%(x_odom, y_odom)
             
-            cv2.putText(cv_image, str_odom, (340, 150), font, 1, (255,255,255), 1, cv2.LINE_AA)
+            cv2.putText(cv_image, str_odom, (340, 150), font, 1, (255,255,255), 1, cv2.LINE_AA) # devolve na imagem as posicoes x e y detectadas pela odometria
 
             str_distancia = f'DISTANCIA: {distancia}'
 
-            cv2.putText(cv_image, str_distancia, (350, 50), font, 1, (255,255,255), 1, cv2.LINE_AA)
+            cv2.putText(cv_image, str_distancia, (350, 50), font, 1, (255,255,255), 1, cv2.LINE_AA) # devolve na imagem a distancia ate o objeto
 
             str_estado = f'ESTADO: {state}'
 
-            cv2.putText(cv_image,str_estado, (350, 70), font, 1, (255,255,255), 1, cv2.LINE_AA)
+            cv2.putText(cv_image,str_estado, (350, 70), font, 1, (255,255,255), 1, cv2.LINE_AA) # devolve na imagem o estado atual
 
             str_bifurcacao = "x_bifur = %5.2f y_bifur = %5.2f"%(x_bifurcacao, y_bifurcacao)
 
-            cv2.putText(cv_image,str_bifurcacao, (340, 110), font, 1, (255,255,255), 1, cv2.LINE_AA)
+            cv2.putText(cv_image,str_bifurcacao, (340, 110), font, 1, (255,255,255), 1, cv2.LINE_AA) # devolve na imagem as posicoes x e y da bifurcacao (perna da pista)
 
             str_rotatoria = "x_rot = %5.2f y_rot = %5.2f"%(x_rotatoria, y_rotatoria)
 
-            cv2.putText(cv_image,str_rotatoria, (340, 130), font, 1, (255,255,255), 1, cv2.LINE_AA)
+            cv2.putText(cv_image,str_rotatoria, (340, 130), font, 1, (255,255,255), 1, cv2.LINE_AA) # devolve na imagem as posicoes x e y da rotatoria (cabeca da pista)
 
             if identificaCreeper:
-                media_cor, centro_frame, area_frame = putils.identifica_cor(cv_image,cor_desejada)
+                media_cor, centro_frame, area_frame = putils.identifica_cor(cv_image,cor_desejada) 
 
                 area_cor = area_frame
                 centro_cor = media_cor
 
                 if ConceitoB:
                     str_goal = f'GOAL: achar o creeper {cor_desejada} de id {id_desejado}'
-                    cv2.putText(cv_image,str_goal, (0, 20), font, 1, (0,0,0), 2, cv2.LINE_AA)
+                    cv2.putText(cv_image,str_goal, (0, 20), font, 1, (0,0,0), 2, cv2.LINE_AA) # devolve na imagem cor e ID do creeper desejado
                 else:
                     str_goal = f'GOAL: achar o creeper {cor_desejada}'
-                    cv2.putText(cv_image,str_goal, (0, 20), font, 1, (0,0,0), 2, cv2.LINE_AA)
+                    cv2.putText(cv_image,str_goal, (0, 20), font, 1, (0,0,0), 2, cv2.LINE_AA) # devolve na imagem cor do creeper desejado
 
             else:
                 str_goal = f'GOAL: seguir a pista'
-                cv2.putText(cv_image,str_goal, (0, 20), font, 1, (0,0,0), 2, cv2.LINE_AA)
+                cv2.putText(cv_image,str_goal, (0, 20), font, 1, (0,0,0), 2, cv2.LINE_AA) # devolve na imagem o objetivo de percorrer a pista
 
         cv2.imshow("cv_image", cv_image)
         cv2.waitKey(1)
@@ -314,11 +313,11 @@ if __name__=="__main__":
 
     c_img = (320,240) # Centro da imagem  que ao todo é 640 x 480
 
-    v_slow = 0.4
-    v_rapido = 1
+    v_slow = 0.4 # velocidade linear pequena
+    v_rapido = 1 # velocidade linear alta
 
-    w_slow = 0.34
-    w_rapido = 0.85
+    w_slow = 0.34 # velocidade angular pequena
+    w_rapido = 0.85 # velocidade angular alta
 
     # v_slow = 0.1
     # v_rapido = 0.3
@@ -327,111 +326,123 @@ if __name__=="__main__":
     # w_rapido = 0.85
 
     
-    INICIAL= -1
-    AVANCA = 0
-    AVANCA_RAPIDO = 1
-    ALINHA = 2
-    TERMINOU = 3
-    PARAR = 4
-    VIRAR_ESQUERDA = 5
-    VIRAR_DIREITA = 6
-    CORTAR_MASK = 7
-    VOLTAR = 8
-    FAZENDO_ROTATORIA = 9
-    ALINHA_COR = 10
-    SAIR_ROTATORIA = 11
+    INICIAL= -1 # valor do estado INICIAL
+
+    AVANCA = 0 # valor do estado AVANCA
+
+    AVANCA_RAPIDO = 1 # valor do estado AVANCA_RAPIDO
+
+    ALINHA = 2 # valor do estado ALINHA
+
+    TERMINOU = 3 # valor do estado TERMINOU
+
+    PARAR = 4 # valor do estado PARAR
+
+    VIRAR_ESQUERDA = 5 # valor do estado VIRAR_ESQUERDA
+
+    VIRAR_DIREITA = 6 # valor do estado VIRAR_DIREITA 
+
+    CORTAR_MASK = 7 # valor do estado CORTAR_MASK
+
+    VOLTAR = 8 # valor do estado VOLTAR 
+
+    FAZENDO_ROTATORIA = 9 # valor do estado FAZENDO_ROTATORIA
+
+    ALINHA_COR = 10 # valor do estado ALINHA_COR
+
+    SAIR_ROTATORIA = 11 # valor do estado SAIR_ROTATORIA
 
 
-    segunda_volta = False
+    segunda_volta = False # determina condicao segunda_volta
 
-    rotatoria = False
+    rotatoria = False # determina condicao rotatoria
     
-    state = INICIAL
+    state = INICIAL # determina em qual estado comeca
 
-    area_ideal = 1100
+    area_ideal = 1100 # determina a area do contorno da cor para comecar a se aproximar do creeper
 
-    margem = 0.45
+    margem = 0.45 # determina a margem da posicao do centro da tela para fazer o robo alinhar com a regressao
 
 
-    def inicial():
+    def inicial(): # funcao que roda no estado INICIAL
         pass
 
-    def avanca():
+    def avanca(): # funcao que roda no estado AVANCA
         vel = Twist(Vector3(v_slow,0,0), Vector3(0,0,0)) 
-        cmd_vel.publish(vel) 
+        cmd_vel.publish(vel) # faz o robo andar reto devagar
 
-    def avanca_rapido():
-        vel = Twist(Vector3(v_slow,0,0), Vector3(0,0,0))         
-        cmd_vel.publish(vel)
+    def avanca_rapido(): # funcao que roda no estado AVANCA_RAPIDO
+        vel = Twist(Vector3(v_slow,0,0), Vector3(0,0,0))          
+        cmd_vel.publish(vel) # faz o rbo andar reto rapido
 
-    def alinha():
+    def alinha(): # funcao que roda no estado ALINHA
         delta_x = c_img[x] - centro_yellow[x]
         max_delta = 150.0
         w = (delta_x/max_delta)*w_rapido
-        vel = Twist(Vector3(v_slow,0,0), Vector3(0,0,w)) 
-        cmd_vel.publish(vel)       
+        vel = Twist(Vector3(v_slow,0,0), Vector3(0,0,w))
+        cmd_vel.publish(vel) # faz o robo girar e andar para alinhar com a pista  
 
-    def terminou():
+    def terminou(): # funcao que roda no estado TERMINOU
         zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
-        cmd_vel.publish(zero)
+        cmd_vel.publish(zero) # faz o robo parar
 
-    def parar():
+    def parar(): # funcao que roda no estado PARAR
         # zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
         # cmd_vel.publish(zero)
         # rospy.sleep(2)
         pass
         
-    def cortar_mask():
+    def cortar_mask(): # funcao que roda no estado CORTAR_MASK
         pass
         
-    def virar_esquerda():
+    def virar_esquerda(): # funcao que roda no estado VIRAR_ESQUERDA
         zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
-        cmd_vel.publish(zero)
+        cmd_vel.publish(zero) # faz o robo parar
         rospy.sleep(0.5)
         w = 0.6
         giro = math.radians(60)
         delta_t = giro/w
         vel = Twist(Vector3(0,0,0), Vector3(0,0,w))
-        cmd_vel.publish(vel)
+        cmd_vel.publish(vel) # faz o robo girar para a esquerda
         rospy.sleep(delta_t)
        
        
-    def virar_direita():
+    def virar_direita(): # funcao que roda no estado VIRAR_DIREITA
         w = 20
         giro = math.radians(45)
         delta_t = giro/w
         vel = Twist(Vector3(0,0,0), Vector3(0,0,-w))
-        cmd_vel.publish(vel)
+        cmd_vel.publish(vel) # faz o robo girar para a direita
         rospy.sleep(delta_t)
 
-    def voltar():
+    def voltar(): # funcao que roda no estado VOLTAR
         w = 2
         giro = math.radians(145)
         delta_t = giro/w
         vel = Twist(Vector3(0,0,0), Vector3(0,0,w))
-        cmd_vel.publish(vel)
+        cmd_vel.publish(vel) # faz o robo girar
         rospy.sleep(delta_t)
 
-    def fazendo_rotatoria():
+    def fazendo_rotatoria(): # funcao que roda no estado FAZENDO_ROTATORIA
         pass
 
 
-    def alinha_cor():
+    def alinha_cor(): # funcao que roda no estado ALINHA_COR
         delta_x = c_img[x] - centro_cor[x]
         max_delta = 150.0
         w = (delta_x/max_delta)*w_rapido
         vel = Twist(Vector3(v_slow,0,0), Vector3(0,0,w)) 
-        cmd_vel.publish(vel)    
+        cmd_vel.publish(vel)   # faz o robo girar e andar para alinhar com a regressao linear 
 
-    def sair_rotatoria():
+    def sair_rotatoria(): # funcao que roda no estado SAIR_ROTATORIA
         zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
-        cmd_vel.publish(zero)
+        cmd_vel.publish(zero) # faz o robo parar
         rospy.sleep(0.5)
         w = 2
         giro = math.radians(5)
         delta_t = giro/w
         vel = Twist(Vector3(0,0,0), Vector3(0,0,w))
-        cmd_vel.publish(vel)
+        cmd_vel.publish(vel) # faz o robo girar
         rospy.sleep(delta_t)
 
 
@@ -470,7 +481,7 @@ if __name__=="__main__":
            
         if state == VIRAR_ESQUERDA:
             rospy.sleep(1.5)
-            segunda_volta = False
+            segunda_volta = False 
 
         if state == SAIR_ROTATORIA:
             rotatoria = False
@@ -478,12 +489,12 @@ if __name__=="__main__":
         if state == PARAR:
             str_fazendo_bifur = "VAI BIFURCAR"
             print(str_fazendo_bifur)
-            cv2.putText(cv_image,str_fazendo_bifur, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
+            cv2.putText(cv_image,str_fazendo_bifur, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA) # devolve na imagem que vai bifurcar
             w = 5
             giro = math.radians(10)
             delta_t = giro/w
             vel = Twist(Vector3(0.3,0,0), Vector3(0,0,w))
-            cmd_vel.publish(vel)
+            cmd_vel.publish(vel) # faz o robo andar e girar
             rospy.sleep(delta_t)
             
         if state == TERMINOU:
@@ -500,8 +511,8 @@ if __name__=="__main__":
                     if distancia < 1.33 and i[0] == 100 :
                         state = CORTAR_MASK # corta mascara e bifurca para esquerda
                         state = PARAR
-                        x_bifurcacao = x_odom
-                        y_bifurcacao = y_odom 
+                        x_bifurcacao = x_odom # registra pela odometria a posicao de x da bifurcacao (pernas da pista)
+                        y_bifurcacao = y_odom # registra pela odometria a posicao de y da bifurcacao (pernas da pista)
                         
                     if i[0] == 150 and distancia < 0.7:
                         state = TERMINOU #chega no final na bifurcacao da esquerda e volta para pista
@@ -515,8 +526,8 @@ if __name__=="__main__":
 
                     if i[0] == 200:
                         if 1.3 > distancia > 0.75: #entra na rotatoria pela esquerda
-                            x_rotatoria = x_odom
-                            y_rotatoria = y_odom
+                            x_rotatoria = x_odom # registra pela odometria a posicao de x da rotatoria (cabeca da pista)
+                            y_rotatoria = y_odom # registra pela odometria a posicao de y da rotatoria (cabeca da pista)
 
                             if id_desejado == 11:
                                 state = VIRAR_DIREITA
@@ -533,20 +544,22 @@ if __name__=="__main__":
                 if x_odom > x_bifurcacao - margem:
                     str_fazendo_bifur = "VAI BIFURCAR NOVAMENTE"
                     print(str_fazendo_bifur)
-                    cv2.putText(cv_image,str_fazendo_bifur, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
+                    cv2.putText(cv_image,str_fazendo_bifur, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA) 
+                    # devolve na imagem que vai bifurcar novamente
+                    
                     state = VIRAR_ESQUERDA
 
         if rotatoria:
             str_fazendo_rot = "FAZENDO ROTATORIA"
             print(str_fazendo_rot)
-            cv2.putText(cv_image,str_fazendo_rot, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
+            cv2.putText(cv_image,str_fazendo_rot, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA) # devolve na imagem que vai fazera rotatoria
 
             if angle_yellow > 20:
                 if x_odom < x_rotatoria + 0.7 and y_odom < y_rotatoria - 0.5:
                     state = SAIR_ROTATORIA
                     str_sair_rot = 'SAIR DA ROTATORIA'
                     print(str_sair_rot)
-                    cv2.putText(cv_image,str_sair_rot, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
+                    cv2.putText(cv_image,str_sair_rot, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA) # devolve na imagem que vai sair da rotatoria
                     
 
         if identificaCreeper:
@@ -561,7 +574,9 @@ if __name__=="__main__":
                         if area_cor > 12500: 
                             str_creeper = 'ENCONTROU O CREEPER'
                             print(str_creeper)
-                            cv2.putText(cv_image,str_creeper, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
+                            cv2.putText(cv_image,str_creeper, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA) 
+                            # devolve na imagem que o robo achou o creeper
+
                             state = TERMINOU 
                             state = VOLTAR
                             bater = False
@@ -584,7 +599,8 @@ if __name__=="__main__":
 
                                 str_creeper = 'ENCONTROU O CREEPER'
                                 print(str_creeper)
-                                cv2.putText(cv_image,str_creeper, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
+                                cv2.putText(cv_image,str_creeper, (350, 90), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA) 
+                                # devolve na imagem que o robo achou o creeper
 
                                 if c_img[x] - tol_centro < centro_cor[x] < c_img[x] + tol_centro:
                                     state = AVANCA
@@ -595,29 +611,30 @@ if __name__=="__main__":
 
                                             str_creeper = 'VAI PEGAR O CREEPER'
                                             print(str_creeper)
-                                            cv2.putText(cv_image,str_creeper, (350, 150), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
+                                            cv2.putText(cv_image,str_creeper, (350, 150), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA) 
+                                            # devolve na imagem que o robo vai pegar o creeper
 
                                             zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
-                                            cmd_vel.publish(zero)
+                                            cmd_vel.publish(zero) # faz o robo parar
                                             rospy.sleep(1)
 
-                                            ombro.publish(-0.35) ## para frente
+                                            ombro.publish(-0.35) ## faz a garra ficar para frente, e um pouco para baixo (menor do que 0)
                                             rospy.sleep(2)
 
-                                            garra.publish(-1.0) ## Aberto
+                                            garra.publish(-1.0) ## abre a garra
                                             rospy.sleep(0.5)
 
                                             vel = Twist(Vector3(0.1,0,0), Vector3(0,0,0)) 
-                                            cmd_vel.publish(vel) 
+                                            cmd_vel.publish(vel) # faz o robo andar
                                             rospy.sleep(2.85)
 
-                                            cmd_vel.publish(zero)
+                                            cmd_vel.publish(zero) # faz o robo parar
                                             rospy.sleep(1)
 
-                                            garra.publish(0.0)  ## Fechado
+                                            garra.publish(0.0)  ## fecha a garra
                                             rospy.sleep(3.5)
 
-                                            ombro.publish(0.15) ## para cima
+                                            ombro.publish(0.15) ## sobe a garra um pouco (fica acima de 0)
                                             rospy.sleep(0.3)
 
                                             state = TERMINOU 
@@ -633,28 +650,29 @@ if __name__=="__main__":
                                             str_creeper = 'VAI PEGAR O CREEPER'
                                             print(str_creeper)
                                             cv2.putText(cv_image,str_creeper, (350, 150), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
+                                            # devolve na imagem que o robo vai pegar o creeper
 
                                             zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
-                                            cmd_vel.publish(zero)
+                                            cmd_vel.publish(zero) # faz o robo parar
                                             rospy.sleep(1)
 
-                                            ombro.publish(-0.35) ## para frente
+                                            ombro.publish(-0.35) ## faz a garra ficar para frente, e um pouco para baixo (menor do que 0)
                                             rospy.sleep(2)
 
-                                            garra.publish(-1.0) ## Aberto
+                                            garra.publish(-1.0) ## abre a garra
                                             rospy.sleep(0.5)
 
                                             vel = Twist(Vector3(0.1,0,0), Vector3(0,0,0)) 
-                                            cmd_vel.publish(vel) 
+                                            cmd_vel.publish(vel) # faz o robo andar
                                             rospy.sleep(3.63)
 
-                                            cmd_vel.publish(zero)
+                                            cmd_vel.publish(zero) # faz o robo parar
                                             rospy.sleep(1)
 
-                                            garra.publish(0.0)  ## Fechado
+                                            garra.publish(0.0)  ## fecha a garra
                                             rospy.sleep(3.5)
 
-                                            ombro.publish(0.05) ## para cima
+                                            ombro.publish(0.05) ## sobe a garra um pouco (fica acima de 0)
                                             rospy.sleep(0.3)
 
                                             state = TERMINOU 
@@ -670,28 +688,29 @@ if __name__=="__main__":
                                             str_creeper = 'VAI PEGAR O CREEPER'
                                             print(str_creeper)
                                             cv2.putText(cv_image,str_creeper, (350, 150), cv2.FONT_HERSHEY_PLAIN, 1, (150, 0, 200), 1, cv2.LINE_AA)
+                                            # devolve na imagem que o robo vai pegar o creeper
 
                                             zero = Twist(Vector3(0,0,0), Vector3(0,0,0))         
-                                            cmd_vel.publish(zero)
+                                            cmd_vel.publish(zero) # faz o robo parar
                                             rospy.sleep(1)
 
-                                            ombro.publish(-0.35) ## para frente
+                                            ombro.publish(-0.35) ## faz a garra ficar para frente, e um pouco para baixo (menor do que 0)
                                             rospy.sleep(2)
 
-                                            garra.publish(-1.0) ## Aberto
+                                            garra.publish(-1.0) ## abre a garra
                                             rospy.sleep(0.5)
 
                                             vel = Twist(Vector3(0.1,0,0), Vector3(0,0,0)) 
-                                            cmd_vel.publish(vel) 
+                                            cmd_vel.publish(vel) # faz o robo andar
                                             rospy.sleep(2.42)
 
-                                            cmd_vel.publish(zero)
+                                            cmd_vel.publish(zero) # faz o robo parar
                                             rospy.sleep(1)
 
-                                            garra.publish(0.0)  ## Fechado
+                                            garra.publish(0.0)  ## fecha a garra
                                             rospy.sleep(3.5)
 
-                                            ombro.publish(0.05) ## para cima
+                                            ombro.publish(0.05) ## sobe a garra um pouco (fica acima de 0)
                                             rospy.sleep(0.3)
 
                                             state = TERMINOU 
