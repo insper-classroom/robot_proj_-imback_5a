@@ -94,9 +94,9 @@ identificaCreeper  = False
 
 #---------------------------------------- OBJETIVOS --------------------------------------------------------------------------------------------------------------------------------------------
 
-# goal = ("blue", 12, "dog")
+goal = ("blue", 12, "dog")
 # goal = ("green", 23, "horse")
-goal = ("orange", 11, "cow")
+# goal = ("orange", 11, "cow")
 
 cor_desejada = goal[0]
 id_desejado = goal[1]
@@ -109,17 +109,17 @@ id_desejado = goal[1]
 
 ConceitoC = False
 
-# 1) ConceitoC = True, linha 737
-# 2) ConceitoB = False,  linha 738
-# 2) Se for testar seguir a pista faca: identificaCreeper = False; linha 736
+# 1) ConceitoC = True, linha 744
+# 2) ConceitoB = False,  linha 745
+# 2) Se for testar seguir a pista faca: identificaCreeper = False; linha 743
 # 3) Se for testar a identificacao do creeper,  identificaCreeper = True;  escolha a cor, e passe-a em goal
 
 
 ConceitoB = False
 
-# 1) ConceitoC = False, linha 737
-# 2) ConceitoB = True,  linha 738
-# 3) Descomente o goal (linha 95,96,97) para cor e id que se deseja testar
+# 1) ConceitoC = False, linha 751
+# 2) ConceitoB = True,  linha 752
+# 3) Descomente o goal (linha 97,98,99) para cor e id que se deseja testar
 
 
 # -------------------------------------- FUNCOES DE POSICOES E SENSORES ----------------------------------------------------------------------------------------------------------------------------
@@ -373,7 +373,7 @@ if __name__=="__main__":
 
     def avanca_rapido(): # funcao que roda no estado AVANCA_RAPIDO
         vel = Twist(Vector3(v_slow,0,0), Vector3(0,0,0))          
-        cmd_vel.publish(vel) # faz o rbo andar reto rapido
+        cmd_vel.publish(vel) # faz o robo andar reto rapido
 
     def alinha(): # funcao que roda no estado ALINHA
         delta_x = c_img[x] - centro_yellow[x]
@@ -728,13 +728,6 @@ if __name__=="__main__":
                                 else: 
                                     state = ALINHA_COR
 
-                    
-                
-
-                # else: 
-                #     state = ALINHA_COR
-
-        # print("centro_cor {}  area_cor {}  state: {} ".format(centro_cor, area_cor, state))
 
     acoes = {INICIAL:inicial, AVANCA: avanca, AVANCA_RAPIDO: avanca_rapido, 
     ALINHA: alinha, TERMINOU: terminou, PARAR: parar, VIRAR_ESQUERDA: virar_esquerda, VIRAR_DIREITA: virar_direita,
