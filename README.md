@@ -42,7 +42,3 @@ Para rodar a garra: roslaunch mybot_description mybot_control2.launch
 * Pegando creeper azul (blue) de id 12 : https://www.youtube.com/watch?v=5BpvoycsNI4&ab_channel=Mr.TVS
 * Pegando creeper verde (green) de id 23: https://www.youtube.com/watch?v=TiWEbuf1Uq0&ab_channel=Mr.TVS
 * Pegando creeper laranja (orange) de id 11: https://www.youtube.com/watch?v=R6wzTB1jDYM&ab_channel=Mr.TVS
-
-
-
-
