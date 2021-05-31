@@ -21,12 +21,14 @@ from geometry_msgs.msg import Twist, Vector3, Pose, Vector3Stamped
 from std_msgs.msg import Float64
 import cv2.aruco as aruco
 from scipy.spatial.transform import Rotation as R
-import visao_module
+import visao_module #nao foi usado pois nao chegamos no ConceitoA
 import math
 import projeto_utils as putils
 
 # Para rodar a simulacao faca : roslaunch my_simulation forca.launch
+
 # Para rodar o progama: rosrun ros_projeto projeto.py
+
 # Para rodar a garra: roslaunch mybot_description mybot_control2.launch
 
 # ------------------------------------- DEFININDO AS VARIAVEIS ----------------------------------------------------------------------------------------------------------------
@@ -101,18 +103,23 @@ id_desejado = goal[1]
 
 # ----------------------------------------- CONCEITOS FEITOS ------------------------------------------------------------------------------------------------------------------------------------------
 
+
+# Lembrar de inclinar mais os codigos dos aruos, conforme mostra nos videos.
+
+
 ConceitoC = False
 
-# 1) na linha , ConceitoC = True
-# 2) Se for testar seguir a pista faca: identificaCreeper = False; linha
-# 3) Se for testar a identificacao do creeper, escolha a cor, e passe-a em goal
+# 1) ConceitoC = True, linha 737
+# 2) ConceitoB = False,  linha 738
+# 2) Se for testar seguir a pista faca: identificaCreeper = False; linha 736
+# 3) Se for testar a identificacao do creeper,  identificaCreeper = True;  escolha a cor, e passe-a em goal
 
 
 ConceitoB = False
 
-# 1) ConceitoC = False na linha  
-# 2) ConceitoB = True na linha 
-# 3) Modifique o goal (linha ) para cor e id que se deseja testar
+# 1) ConceitoC = False, linha 737
+# 2) ConceitoB = True,  linha 738
+# 3) Descomente o goal (linha 95,96,97) para cor e id que se deseja testar
 
 
 # -------------------------------------- FUNCOES DE POSICOES E SENSORES ----------------------------------------------------------------------------------------------------------------------------
@@ -319,12 +326,6 @@ if __name__=="__main__":
     w_slow = 0.34 # velocidade angular pequena
     w_rapido = 0.85 # velocidade angular alta
 
-    # v_slow = 0.1
-    # v_rapido = 0.3
-
-    # w_slow = 0.34
-    # w_rapido = 0.85
-
     
     INICIAL= -1 # valor do estado INICIAL
 
@@ -351,7 +352,6 @@ if __name__=="__main__":
     ALINHA_COR = 10 # valor do estado ALINHA_COR
 
     SAIR_ROTATORIA = 11 # valor do estado SAIR_ROTATORIA
-
 
     segunda_volta = False # determina condicao segunda_volta
 
@@ -500,7 +500,7 @@ if __name__=="__main__":
         if state == TERMINOU:
             state = VOLTAR
                             
-        if c_img[x] - tol_centro < centro_yellow[x] < c_img[x] + tol_centro:
+        if c_img[x] - tol_centro < centro_yellow[x] < c_img[x] + tol_centro: #verifica a centralizaco do amarelo para seguir a pista
             state = AVANCA
             if   - tol_ang< angle_yellow  < tol_ang:  # para angulos centrados na vertical, regressao de x = f(y) como está feito
                 state = AVANCA_RAPIDO
@@ -537,7 +537,7 @@ if __name__=="__main__":
                             rotatoria = True
  
         else: 
-                state = ALINHA        
+                state = ALINHA     #alinha o robo no centro do amarelo para seguir a pista   
 
         if segunda_volta:
             if x_odom < x_bifurcacao and y_odom < y_bifurcacao:
@@ -568,7 +568,7 @@ if __name__=="__main__":
 
                 if ConceitoC:
 
-                    if c_img[x] - tol_centro < centro_cor[x] < c_img[x] + tol_centro:
+                    if c_img[x] - tol_centro < centro_cor[x] < c_img[x] + tol_centro: # verifica a centralizacao do creeper
                         state = AVANCA
 
                         if area_cor > 12500: 
@@ -582,7 +582,7 @@ if __name__=="__main__":
                             bater = False
                             return
                     else: 
-                        state = ALINHA_COR
+                        state = ALINHA_COR #  # alinha o creeper no centro da tela
                 
 
                 if ConceitoB:
@@ -666,6 +666,13 @@ if __name__=="__main__":
                                             cmd_vel.publish(vel) # faz o robo andar
                                             rospy.sleep(3.63)
 
+                                            w = 0.2
+                                            giro = math.radians(3)
+                                            delta_t = giro/w
+                                            vel = Twist(Vector3(0,0,0), Vector3(0,0,w))
+                                            cmd_vel.publish(vel) # faz o robo a  girar
+                                            rospy.sleep(delta_t)
+
                                             cmd_vel.publish(zero) # faz o robo parar
                                             rospy.sleep(1)
 
@@ -683,7 +690,7 @@ if __name__=="__main__":
 
                                     if cor_desejada == 'orange':
 
-                                        if area_cor > 12000: 
+                                        if area_cor > 11700: 
 
                                             str_creeper = 'VAI PEGAR O CREEPER'
                                             print(str_creeper)
@@ -702,7 +709,7 @@ if __name__=="__main__":
 
                                             vel = Twist(Vector3(0.1,0,0), Vector3(0,0,0)) 
                                             cmd_vel.publish(vel) # faz o robo andar
-                                            rospy.sleep(2.42)
+                                            rospy.sleep(2.5)
 
                                             cmd_vel.publish(zero) # faz o robo parar
                                             rospy.sleep(1)
